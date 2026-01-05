@@ -170,37 +170,37 @@ MonoBehaviour:
 
     #######......#######
 
-    ########......######
-
-    #########......#####
-
-    ##########......####
-
-    ##########......####
-
-    #########.......####
-
-    ########.......#####
-
-    #######.......######
-
     #######......#######
 
-    #######......#######
+    ######.......#######
 
-    #######......#######
+    ######.......#######
+
+    ######.......#######
+
+    ######........######
+
+    ######........######
+
+    ######........######
+
+    ######.......#######
+
+    ######.......#######
+
+    ######.......#######
+
+    ######.......#######
+
+    ######.......#######
 
     ######........######
 
     #####..........#####
 
-    ####............####
+    #####..........#####
 
-    ###..............###
-
-    ###..............###
-
-    ####............####
+    #####..........#####
 
     #####..........#####
 
@@ -258,10 +258,10 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RouteWalker
   map: {fileID: 336385847}
-  autoPickStartEnd: 1
+  autoPickStartEnd: 0
   startCell: {x: 8, y: 1}
   endCell: {x: 8, y: 25}
-  speed: 1
+  speed: 0.5
   arriveDistance: 0.05
   playOnStart: 1
   drawPathGizmos: 1
@@ -505,6 +505,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1017292736}
+  - component: {fileID: 1017292737}
   m_Layer: 0
   m_Name: RaycastView
   m_TagString: Untagged
@@ -527,6 +528,55 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1017292737
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1017292735}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bc6e7efcf3fc2b343bfddb0121959aa3, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::RaycastView
+  map: {fileID: 336385847}
+  player: {fileID: 494830975}
+  output: {fileID: 1338809503}
+  fovDegrees: 70
+  internalWidth: 240
+  matchScreenAspect: 1
+  internalHeightOverride: 426
+  maxDistanceCells: 40
+  sky:
+    serializedVersion: 2
+    rgba: 4294953130
+  ground:
+    serializedVersion: 2
+    rgba: 4280824380
+  wall:
+    serializedVersion: 2
+    rgba: 4281497640
+  draw: 1
+  useDragLook: 1
+  maxDragPixels: 500
+  invertY: 0
+  useMouseAsGaze: 1
+  maxYawDegrees: 45
+  maxPitchPixels: 40
+  deadZone: 0.12
+  lookSmoothing: 10
+  wallTex: {fileID: 2800000, guid: 2134086721e0b2947aba288c1754c4fe, type: 3}
+  useWallTexture: 1
+  useFog: 1
+  fogColor:
+    serializedVersion: 2
+    rgba: 4281482280
+  fogStart: 8
+  fogEnd: 22
+  wallHeightScale: 5
+  wallTexWorldWidth: 7
+  wallTexVScale: 1
 --- !u!1 &1338809501
 GameObject:
   m_ObjectHideFlags: 0
@@ -577,7 +627,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.RawImage
   m_Material: {fileID: 0}
-  m_Color: {r: 1, g: 0.7537076, b: 0.3915094, a: 1}
+  m_Color: {r: 0.9622642, g: 0.6376321, b: 0.19517623, a: 1}
   m_RaycastTarget: 0
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1

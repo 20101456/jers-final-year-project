@@ -261,7 +261,7 @@ MonoBehaviour:
   autoPickStartEnd: 0
   startCell: {x: 8, y: 1}
   endCell: {x: 8, y: 25}
-  speed: 0.5
+  speed: 1
   arriveDistance: 0.05
   playOnStart: 1
   drawPathGizmos: 1
@@ -417,6 +417,108 @@ MonoBehaviour:
     m_VarianceClampScale: 0.9
     m_ContrastAdaptiveSharpening: 0
   m_Version: 2
+--- !u!1 &827175270
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 827175272}
+  - component: {fileID: 827175271}
+  m_Layer: 0
+  m_Name: FireflyEncounterTrigger
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &827175271
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 827175270}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 11d506847049fc74b905e54f76ea4291, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::EncounterTrigger
+  player: {fileID: 494830976}
+  loader: {fileID: 951942063}
+  triggerRadius: 0.3
+  oneShot: 1
+--- !u!4 &827175272
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 827175270}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -1.59, y: 10.66, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &951942062
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 951942064}
+  - component: {fileID: 951942063}
+  m_Layer: 0
+  m_Name: EncounterSystem
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &951942063
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 951942062}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 80e9b30b3f177f8439bf5cec4067bfdc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::EncounterLoader
+  encounterSceneName: EncounterFirefly1
+  disableObjects:
+  - {fileID: 2002960148}
+  - {fileID: 336385846}
+  - {fileID: 1017292735}
+  - {fileID: 494830974}
+  disableBehaviours:
+  - {fileID: 529657245}
+  - {fileID: 494830975}
+  - {fileID: 1017292737}
+--- !u!4 &951942064
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 951942062}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 233.31639, y: 244.62267, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &966884199
 GameObject:
   m_ObjectHideFlags: 0
@@ -550,13 +652,13 @@ MonoBehaviour:
   maxDistanceCells: 40
   sky:
     serializedVersion: 2
-    rgba: 4294953130
+    rgba: 4278209907
   ground:
     serializedVersion: 2
-    rgba: 4280824380
+    rgba: 4278214846
   wall:
     serializedVersion: 2
-    rgba: 4281497640
+    rgba: 4280440704
   draw: 1
   useDragLook: 1
   maxDragPixels: 500
@@ -571,8 +673,8 @@ MonoBehaviour:
   useFog: 1
   fogColor:
     serializedVersion: 2
-    rgba: 4281482280
-  fogStart: 8
+    rgba: 4282286234
+  fogStart: 12
   fogEnd: 22
   wallHeightScale: 5
   wallTexWorldWidth: 7
@@ -761,3 +863,5 @@ SceneRoots:
   - {fileID: 336385848}
   - {fileID: 494830976}
   - {fileID: 1017292736}
+  - {fileID: 951942064}
+  - {fileID: 827175272}

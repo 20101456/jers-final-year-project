@@ -1,10 +1,10 @@
 fileFormatVersion: 2
-guid: 2134086721e0b2947aba288c1754c4fe
+guid: efacc193b7408fe4f8af2969e120652b
 TextureImporter:
   internalIDToNameTable:
   - first:
-      213: 4496006633154015554
-    second: Wall_TreeLine_0
+      213: -8451752369490405339
+    second: Firefly_0
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -24,7 +24,7 @@ TextureImporter:
     heightScale: 0.25
     normalMapFilter: 0
     flipGreenChannel: 0
-  isReadable: 1
+  isReadable: 0
   streamingMipmaps: 0
   streamingMipmapsPriority: 0
   vTOnly: 0
@@ -42,7 +42,7 @@ TextureImporter:
     mipBias: 0
     wrapU: 1
     wrapV: 1
-    wrapW: 0
+    wrapW: 1
   nPOTScale: 0
   lightmap: 0
   compressionQuality: 50
@@ -75,7 +75,7 @@ TextureImporter:
     maxTextureSize: 2048
     resizeAlgorithm: 0
     textureFormat: -1
-    textureCompression: 0
+    textureCompression: 1
     compressionQuality: 50
     crunchedCompression: 0
     allowsAlphaSplitting: 0
@@ -113,13 +113,13 @@ TextureImporter:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: Wall_TreeLine_0
+      name: Firefly_0
       rect:
         serializedVersion: 2
         x: 0
-        y: 0
-        width: 250
-        height: 147
+        y: 118
+        width: 823
+        height: 548
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -128,8 +128,8 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 241f1f44636056e30800000000000000
-      internalID: 4496006633154015554
+      spriteID: 52855fecff755ba80800000000000000
+      internalID: -8451752369490405339
       vertices: []
       indices: 
       edges: []
@@ -148,7 +148,7 @@ TextureImporter:
     spriteCustomMetadata:
       entries: []
     nameFileIdTable:
-      Wall_TreeLine_0: 4496006633154015554
+      Firefly_0: -8451752369490405339
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 

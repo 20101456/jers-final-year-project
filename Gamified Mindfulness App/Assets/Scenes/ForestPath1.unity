@@ -261,7 +261,7 @@ MonoBehaviour:
   autoPickStartEnd: 0
   startCell: {x: 8, y: 1}
   endCell: {x: 8, y: 25}
-  speed: 1
+  speed: 1.5
   arriveDistance: 0.05
   playOnStart: 1
   drawPathGizmos: 1

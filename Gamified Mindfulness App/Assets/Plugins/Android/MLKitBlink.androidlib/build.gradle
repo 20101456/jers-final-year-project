@@ -1,0 +1,24 @@
+plugins {
+    id 'com.android.library'
+}
+
+android {
+    namespace 'com.wander.blink'
+    compileSdk 30
+
+    defaultConfig {
+        minSdk 23
+        targetSdk 30
+        consumerProguardFiles 'proguard-rules.pro'
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
+    }
+}
+
+dependencies {
+    // Bundled model (no “first run download” delay)
+    implementation 'com.google.mlkit:face-detection:16.1.7'
+}

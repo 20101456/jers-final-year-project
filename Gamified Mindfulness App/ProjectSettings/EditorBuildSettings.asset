@@ -14,12 +14,15 @@ EditorBuildSettings:
   - enabled: 0
     path: Assets/Scenes/EncounterTemplate.unity
     guid: 7fc6506cc0072dc4181f00ed5985fc2d
-  - enabled: 1
+  - enabled: 0
     path: Assets/Scenes/ForestPath1.unity
     guid: b1790057d38636346b08c6dcd152304a
-  - enabled: 1
+  - enabled: 0
     path: Assets/Scenes/EncounterFirefly1.unity
     guid: 4a78062a92e65b24abde956513b4e536
+  - enabled: 1
+    path: Assets/Scenes/EyeTrackingSandbox.unity
+    guid: 1cc9a117d9112a145af695499ce5a092
   m_configObjects:
     com.unity.dt.app-ui: {fileID: 11400000, guid: 1b1c20d82303e4b5781c3ef50ac1449f, type: 2}
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 2bcd2660ca9b64942af0de543d8d7100, type: 3}

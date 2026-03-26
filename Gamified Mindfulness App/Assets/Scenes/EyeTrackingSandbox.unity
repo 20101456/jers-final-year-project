@@ -334,7 +334,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BlazeFaceSentis
   blazeFaceOnnx: {fileID: 5022602860645237092, guid: 8c932ab800071f846975f04763f26167, type: 3}
-  backend: 256
+  backend: 512
   scoreThreshold: 0.75
 --- !u!4 &1238313148
 Transform:

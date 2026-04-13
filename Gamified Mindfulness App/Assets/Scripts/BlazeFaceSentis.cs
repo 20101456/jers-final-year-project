@@ -1,13 +1,16 @@
-
 using UnityEngine;
 
 public class BlazeFaceSentis : MonoBehaviour
 {
     public Unity.InferenceEngine.ModelAsset blazeFaceOnnx;
-    public Unity.InferenceEngine.BackendType backend = Unity.InferenceEngine.BackendType.GPUCompute;
+    public Unity.InferenceEngine.BackendType backend = Unity.InferenceEngine.BackendType.CPU;
 
-    // thresholds
-    [Range(0.1f, 0.99f)] public float scoreThreshold = 0.75f;
+    [Header("Thresholds")]
+    [Range(0.05f, 0.99f)] public float scoreThreshold = 0.35f;
+
+    [Header("Debug")]
+    public bool verboseLogging = true;
+    public int logEveryNFrames = 30;
 
     SentisModelRunner runner;
     Unity.InferenceEngine.Tensor<float> input;
@@ -17,57 +20,84 @@ public class BlazeFaceSentis : MonoBehaviour
     const int NumAnchors = 896;
     const int BoxStride = 16;
 
-    // Anchor centers only (x,y) in [0..1]
     Vector2[] anchors;
-
     RenderTexture rt128;
 
     void Awake()
     {
-        if (!SystemInfo.supportsComputeShaders && backend == Unity.InferenceEngine.BackendType.GPUCompute)
-            backend = Unity.InferenceEngine.BackendType.CPU; // safe fallback :contentReference[oaicite:12]{index=12}
+        if (backend == Unity.InferenceEngine.BackendType.GPUCompute && !SystemInfo.supportsComputeShaders)
+            backend = Unity.InferenceEngine.BackendType.CPU;
 
         runner = new SentisModelRunner(blazeFaceOnnx, backend);
 
-        input = new Unity.InferenceEngine.Tensor<float>(new Unity.InferenceEngine.TensorShape(1, InSize, InSize, 3));
+        input = new Unity.InferenceEngine.Tensor<float>(
+            new Unity.InferenceEngine.TensorShape(1, InSize, InSize, 3)
+        );
+
         toNHWC128 = new Unity.InferenceEngine.TextureTransform()
             .SetDimensions(InSize, InSize, 3)
             .SetTensorLayout(Unity.InferenceEngine.TensorLayout.NHWC);
 
         anchors = BuildAnchors();
 
-        rt128 = new UnityEngine.RenderTexture(InSize, InSize, 0, RenderTextureFormat.ARGB32);
+        rt128 = new RenderTexture(InSize, InSize, 0, RenderTextureFormat.ARGB32);
+        rt128.filterMode = FilterMode.Bilinear;
+        rt128.wrapMode = TextureWrapMode.Clamp;
         rt128.Create();
+
+        Debug.Log($"BlazeFaceSentis Awake -> backend = {backend}");
     }
 
-    // Call this each frame with your camera texture
     public bool TryDetect(Texture src, out FaceDet det)
     {
         det = default;
-        if (src == null) return false;
 
-        // No per-frame tensor allocations :contentReference[oaicite:13]{index=13}
+        if (src == null || runner == null || input == null)
+            return false;
+
         Graphics.Blit(src, rt128);
         Unity.InferenceEngine.TextureConverter.ToTensor(rt128, input, toNHWC128);
 
         runner.Worker.Schedule(input);
 
-        // Peek outputs (you might need to swap indices depending on the model import)
-        using var boxes = (runner.Worker.PeekOutput(0) as Unity.InferenceEngine.Tensor<float>).ReadbackAndClone();
-        using var scores = (runner.Worker.PeekOutput(1) as Unity.InferenceEngine.Tensor<float>).ReadbackAndClone();
+        var out0Raw = runner.Worker.PeekOutput(0) as Unity.InferenceEngine.Tensor<float>;
+        var out1Raw = runner.Worker.PeekOutput(1) as Unity.InferenceEngine.Tensor<float>;
 
-        var boxesArr = boxes.DownloadToArray();   // Sentis 2.x API :contentReference[oaicite:14]{index=14}
-        var scoresArr = scores.DownloadToArray();
+        if (out0Raw == null || out1Raw == null)
+        {
+            if (verboseLogging && Time.frameCount % logEveryNFrames == 0)
+                Debug.LogWarning("BlazeFaceSentis: one or more outputs were null.");
+            return false;
+        }
+
+        using var out0 = out0Raw.ReadbackAndClone();
+        using var out1 = out1Raw.ReadbackAndClone();
+
+        // Usually boxes has far more values than scores.
+        bool out0IsBoxes = out0.count >= out1.count;
+
+        var boxesArr = out0IsBoxes ? out0.DownloadToArray() : out1.DownloadToArray();
+        var scoresArr = out0IsBoxes ? out1.DownloadToArray() : out0.DownloadToArray();
+
+        if (verboseLogging && Time.frameCount % logEveryNFrames == 0)
+        {
+            Debug.Log(
+                $"BlazeFaceSentis -> out0.count={out0.count}, out1.count={out1.count}, " +
+                $"boxesLen={boxesArr.Length}, scoresLen={scoresArr.Length}"
+            );
+        }
+
+        if (scoresArr == null || scoresArr.Length == 0 || boxesArr == null || boxesArr.Length == 0)
+            return false;
 
         float best = -1f;
         int bestIdx = -1;
 
-        for (int i = 0; i < NumAnchors; i++)
+        int scoreCount = Mathf.Min(NumAnchors, scoresArr.Length);
+
+        for (int i = 0; i < scoreCount; i++)
         {
-            // scores is (1,896,1)
-            float logit = scoresArr[i];
-            // Many BlazeFace conversions treat scores as logits; sigmoid is typical
-            float p = 1f / (1f + Mathf.Exp(-logit));
+            float p = ToProbability(scoresArr[i]);
 
             if (p > best)
             {
@@ -76,26 +106,36 @@ public class BlazeFaceSentis : MonoBehaviour
             }
         }
 
-        if (bestIdx < 0 || best < scoreThreshold) return false;
+        if (verboseLogging && Time.frameCount % logEveryNFrames == 0)
+            Debug.Log($"BlazeFaceSentis -> bestIdx={bestIdx}, bestScore={best:F4}, threshold={scoreThreshold:F2}");
 
-        // boxes is (1,896,16)
+        if (bestIdx < 0 || best < scoreThreshold)
+            return false;
+
         int baseOff = bestIdx * BoxStride;
+
+        if (baseOff + 15 >= boxesArr.Length || bestIdx >= anchors.Length)
+        {
+            if (verboseLogging && Time.frameCount % logEveryNFrames == 0)
+                Debug.LogWarning("BlazeFaceSentis: output indexing exceeded expected bounds.");
+            return false;
+        }
 
         float x = boxesArr[baseOff + 0] + anchors[bestIdx].x * InSize;
         float y = boxesArr[baseOff + 1] + anchors[bestIdx].y * InSize;
         float w = boxesArr[baseOff + 2];
         float h = boxesArr[baseOff + 3];
 
-        // Convert to normalized Rect in src space (because we fed a stretched 128×128 view)
-        det.score = best;
-        det.faceRect01 = new Rect(
+        Rect r = new Rect(
             (x - 0.5f * w) / InSize,
             (y - 0.5f * h) / InSize,
             w / InSize,
             h / InSize
         );
 
-        // 6 keypoints: (x,y)*6 starting at index 4
+        det.score = best;
+        det.faceRect01 = ClampRect01(r);
+
         det.kp01 = new Vector2[6];
         for (int k = 0; k < 6; k++)
         {
@@ -107,14 +147,31 @@ public class BlazeFaceSentis : MonoBehaviour
         return true;
     }
 
-    // BlazeFace has 896 anchors: 16×16×2 + 8×8×6 = 896
+    static float ToProbability(float v)
+    {
+        // If it's already a probability, keep it.
+        if (v >= 0f && v <= 1f)
+            return v;
+
+        // Otherwise treat it like a logit.
+        return 1f / (1f + Mathf.Exp(-v));
+    }
+
+    static Rect ClampRect01(Rect r)
+    {
+        float xMin = Mathf.Clamp01(r.xMin);
+        float yMin = Mathf.Clamp01(r.yMin);
+        float xMax = Mathf.Clamp01(r.xMax);
+        float yMax = Mathf.Clamp01(r.yMax);
+
+        return Rect.MinMaxRect(xMin, yMin, xMax, yMax);
+    }
+
     Vector2[] BuildAnchors()
     {
         var list = new System.Collections.Generic.List<Vector2>(NumAnchors);
 
-        // grid 16x16, 2 anchors per cell
         AddGrid(list, 16, 2);
-        // grid 8x8, 6 anchors per cell
         AddGrid(list, 8, 6);
 
         return list.ToArray();
@@ -123,26 +180,34 @@ public class BlazeFaceSentis : MonoBehaviour
     void AddGrid(System.Collections.Generic.List<Vector2> list, int grid, int repeats)
     {
         for (int y = 0; y < grid; y++)
+        {
             for (int x = 0; x < grid; x++)
             {
                 float cx = (x + 0.5f) / grid;
                 float cy = (y + 0.5f) / grid;
+
                 for (int r = 0; r < repeats; r++)
                     list.Add(new Vector2(cx, cy));
             }
+        }
     }
 
     void OnDestroy()
     {
         input?.Dispose();
         runner?.Dispose();
-        if (rt128 != null) rt128.Release();
+
+        if (rt128 != null)
+        {
+            rt128.Release();
+            Destroy(rt128);
+        }
     }
 
     public struct FaceDet
     {
         public float score;
-        public Rect faceRect01;      // normalized in camera texture space
-        public Vector2[] kp01;       // 6 normalized keypoints
+        public Rect faceRect01;
+        public Vector2[] kp01;
     }
 }

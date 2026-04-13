@@ -131,6 +131,7 @@ GameObject:
   - component: {fileID: 383490682}
   - component: {fileID: 383490681}
   - component: {fileID: 383490680}
+  - component: {fileID: 383490684}
   m_Layer: 0
   m_Name: CameraSystem
   m_TagString: Untagged
@@ -152,7 +153,17 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::FaceDebugDraw
   cameraFeed: {fileID: 383490681}
   detector: {fileID: 1238313147}
+  drawFaceBox: 1
   drawKeypoints: 1
+  showStatus: 1
+  drawCenterTestMarker: 1
+  drawEyeRegions: 1
+  eyeWidthFromEyeSpacing: 0.78
+  eyeHeightFromEyeWidth: 0.62
+  eyeVerticalOffsetFromFaceHeight: 0.06
+  eyeHorizontalSpreadFromEyeSpacing: 0.2
+  lineThickness: 3.5
+  labelKeypointIndices: 1
 --- !u!114 &383490681
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -172,7 +183,7 @@ MonoBehaviour:
   requestHeight: 480
   requestFPS: 30
   mirrorFrontCamera: 1
-  rotationOffset90: 0
+  rotationOffset90: 2
   invertReportedVerticalMirror: 0
   logCameraMeta: 0
 --- !u!114 &383490682
@@ -202,6 +213,39 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &383490684
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 383490679}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 852335c707bb5e34ab5fab6ab3983e9a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::EyeRegionTracker
+  cameraFeed: {fileID: 383490681}
+  faceDebug: {fileID: 383490680}
+  sampleWidth: 24
+  sampleHeight: 12
+  sampleInterval: 0.033
+  closedThreshold01: 0.58
+  reopenThreshold01: 0.68
+  smoothingSpeed: 12
+  minBlinkClosedTime: 0.03
+  maxBlinkClosedTime: 0.5
+  blinkCooldown: 0.1
+  minClosedDepthBelowThreshold: 0.015
+  calibrationDuration: 1.2
+  autoTrackOpenBaseline: 1
+  baselineFallSpeed: 0.75
+  minBaseline: 0.01
+  showDebugOverlay: 1
+  showEyeSamplePreview: 1
+  logBlinkEvents: 1
+  logSampleFailures: 1
+  debugFontSize: 28
 --- !u!1 &1146774752
 GameObject:
   m_ObjectHideFlags: 0
@@ -279,6 +323,7 @@ Canvas:
   m_OverridePixelPerfect: 0
   m_SortingBucketNormalizedSize: 0
   m_VertexColorAlwaysGammaSpace: 0
+  m_UseReflectionProbes: 0
   m_AdditionalShaderChannelsFlag: 0
   m_UpdateRectTransformForStandalone: 0
   m_SortingLayerID: 0
@@ -335,7 +380,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::BlazeFaceSentis
   blazeFaceOnnx: {fileID: 5022602860645237092, guid: 8c932ab800071f846975f04763f26167, type: 3}
   backend: 512
-  scoreThreshold: 0.75
+  scoreThreshold: 0.5
+  verboseLogging: 1
+  logEveryNFrames: 30
 --- !u!4 &1238313148
 Transform:
   m_ObjectHideFlags: 0

@@ -25,9 +25,8 @@ The project combines game design, mobile development, and computer vision to inv
 This project uses **Scrum Light with fortnightly sprints**.
 
 ## Project Links
-- **Landing Page:** [Add link here]
-- **Poster:** [Add link here]
-- **Demo Video:** [Add link here]
+- **Landing Page:** https://20101456.github.io/wander-landing-page/
+- **Poster:** https://drive.google.com/file/d/1E6ogOeJbCeHPe3hUIGX4DzpV20k-9XHF/view
 
 ## Author
 **Jer Casey**  

@@ -11,19 +11,28 @@ public class EyeRegionTracker : MonoBehaviour
     [Range(0.01f, 0.2f)] public float sampleInterval = 0.033f;
 
     [Header("Blink Heuristic")]
-    [Range(0.20f, 0.95f)] public float closedThreshold01 = 0.72f;
-    [Range(0.30f, 0.99f)] public float reopenThreshold01 = 0.88f;
-    [Range(1f, 30f)] public float smoothingSpeed = 12f;
+    [Range(0.20f, 0.95f)] public float closedThreshold01 = 0.78f;
+    [Range(0.30f, 0.99f)] public float reopenThreshold01 = 0.90f;
+    [Range(1f, 30f)] public float smoothingSpeed = 16f;
     [Range(0.01f, 0.25f)] public float minBlinkClosedTime = 0.03f;
     [Range(0.05f, 0.60f)] public float maxBlinkClosedTime = 0.35f;
     [Range(0.01f, 0.30f)] public float blinkCooldown = 0.12f;
-    [Range(0.0f, 0.30f)] public float minClosedDepthBelowThreshold = 0.04f;
+    [Range(0.0f, 0.30f)] public float minClosedDepthBelowThreshold = 0.02f;
 
     [Header("Calibration / Baseline")]
     [Range(0.2f, 3f)] public float calibrationDuration = 1.2f;
     public bool autoTrackOpenBaseline = true;
-    [Range(0.05f, 5f)] public float baselineFallSpeed = 0.75f;
+    [Range(0.05f, 5f)] public float baselineFallSpeed = 0.35f;
     [Range(0.001f, 0.2f)] public float minBaseline = 0.01f;
+
+    [Header("Tracking Stability")]
+    [Range(0.05f, 1.0f)] public float lostTrackingResetDelay = 0.25f;
+    [Range(0.80f, 1.00f)] public float baselineTrackGate01 = 0.94f;
+
+    [Header("Blink Event Logic")]
+    [Range(0.00f, 0.25f)] public float closeSupportMargin01 = 0.10f;
+    [Range(0.00f, 0.25f)] public float reopenSupportMargin01 = 0.18f;
+    [Range(0.01f, 0.25f)] public float maxCloseBuildTime = 0.12f;
 
     [Header("Debug")]
     public bool showDebugOverlay = true;
@@ -48,6 +57,13 @@ public class EyeRegionTracker : MonoBehaviour
     public float RightBaseline { get; private set; }
     public float OpenBaseline => 0.5f * (LeftBaseline + RightBaseline);
 
+    public float StrongerEye01 { get; private set; }
+    public float WeakerEye01 { get; private set; }
+    public float ClosureDepth01 { get; private set; }
+    public float CandidateAge { get; private set; }
+    public float ClosedMinCombined01 => closedMinCombined01;
+    public string LastBlinkDecision { get; private set; } = "None";
+
     public bool EyesClosed { get; private set; }
     public bool BlinkThisFrame { get; private set; }
     public int BlinkCount { get; private set; }
@@ -55,6 +71,8 @@ public class EyeRegionTracker : MonoBehaviour
 
     public bool LastSampleOk { get; private set; }
     public string LastSampleStatus { get; private set; } = "Waiting...";
+
+    public string BlinkPhaseName => blinkPhase.ToString();
 
     RenderTexture leftEyeRT;
     RenderTexture rightEyeRT;
@@ -66,8 +84,19 @@ public class EyeRegionTracker : MonoBehaviour
     float lastBlinkTime = -999f;
     float closedMinCombined01 = 1f;
     float trackingStartTime = -1f;
+    float candidateStartTime;
+    float lastGoodSampleTime = -999f;
 
     GUIStyle debugTextStyle;
+
+    enum BlinkPhase
+    {
+        Idle,
+        Candidate,
+        Closed
+    }
+
+    BlinkPhase blinkPhase = BlinkPhase.Idle;
 
     void Awake()
     {
@@ -89,34 +118,26 @@ public class EyeRegionTracker : MonoBehaviour
 
         if (cameraFeed == null)
         {
-            InvalidateTracking(false);
-            LastSampleOk = false;
-            LastSampleStatus = "cameraFeed missing";
+            HandleTrackingLoss("cameraFeed missing");
             return;
         }
 
         if (faceDebug == null)
         {
-            InvalidateTracking(false);
-            LastSampleOk = false;
-            LastSampleStatus = "faceDebug missing";
+            HandleTrackingLoss("faceDebug missing");
             return;
         }
 
         if (!faceDebug.HasEyeRegions)
         {
-            InvalidateTracking(false);
-            LastSampleOk = false;
-            LastSampleStatus = "Eye regions not ready";
+            HandleTrackingLoss("Eye regions not ready");
             return;
         }
 
         var src = cameraFeed.CorrectedRT;
         if (src == null)
         {
-            InvalidateTracking(false);
-            LastSampleOk = false;
-            LastSampleStatus = "CorrectedRT is null";
+            HandleTrackingLoss("CorrectedRT is null");
             return;
         }
 
@@ -147,9 +168,7 @@ public class EyeRegionTracker : MonoBehaviour
 
         if (!leftOk || !rightOk)
         {
-            InvalidateTracking(false);
-            LastSampleOk = false;
-            LastSampleStatus = $"Sample failed | L:{leftMsg} | R:{rightMsg}";
+            HandleTrackingLoss($"Sample failed | L:{leftMsg} | R:{rightMsg}");
 
             if (logSampleFailures)
                 Debug.LogWarning(LastSampleStatus);
@@ -159,6 +178,7 @@ public class EyeRegionTracker : MonoBehaviour
 
         LastSampleOk = true;
         LastSampleStatus = "Sample OK";
+        lastGoodSampleTime = Time.unscaledTime;
 
         if (trackingStartTime < 0f)
             trackingStartTime = Time.unscaledTime;
@@ -169,6 +189,28 @@ public class EyeRegionTracker : MonoBehaviour
 
         UpdateBaselinesAndSignals();
         UpdateBlinkState();
+    }
+
+    void HandleTrackingLoss(string status)
+    {
+        LastSampleOk = false;
+        LastSampleStatus = status;
+        BlinkThisFrame = false;
+        EyesClosed = false;
+        CandidateAge = 0f;
+
+        if (blinkPhase != BlinkPhase.Idle)
+            LastBlinkDecision = "Rejected: tracking lost";
+
+        blinkPhase = BlinkPhase.Idle;
+        closedMinCombined01 = 1f;
+
+        if (lastGoodSampleTime >= 0f &&
+            Time.unscaledTime - lastGoodSampleTime > lostTrackingResetDelay)
+        {
+            InvalidateTracking(false);
+            LastSampleStatus += " | hard reset";
+        }
     }
 
     void UpdateBaselinesAndSignals()
@@ -187,25 +229,23 @@ public class EyeRegionTracker : MonoBehaviour
             LeftBaseline = Mathf.Max(LeftBaseline, leftCandidate);
             RightBaseline = Mathf.Max(RightBaseline, rightCandidate);
         }
-        else if (autoTrackOpenBaseline && !EyesClosed)
+        else if (autoTrackOpenBaseline && blinkPhase == BlinkPhase.Idle)
         {
+            float riseT = 1f - Mathf.Exp(-(baselineFallSpeed * 2f) * sampleInterval);
+            float fallT = 1f - Mathf.Exp(-baselineFallSpeed * sampleInterval);
+
+            bool leftLooksOpen = leftCandidate >= LeftBaseline * baselineTrackGate01;
+            bool rightLooksOpen = rightCandidate >= RightBaseline * baselineTrackGate01;
+
             if (leftCandidate > LeftBaseline)
-                LeftBaseline = leftCandidate;
-            else
-                LeftBaseline = Mathf.Lerp(
-                    LeftBaseline,
-                    leftCandidate,
-                    1f - Mathf.Exp(-baselineFallSpeed * sampleInterval)
-                );
+                LeftBaseline = Mathf.Lerp(LeftBaseline, leftCandidate, riseT);
+            else if (leftLooksOpen)
+                LeftBaseline = Mathf.Lerp(LeftBaseline, leftCandidate, fallT);
 
             if (rightCandidate > RightBaseline)
-                RightBaseline = rightCandidate;
-            else
-                RightBaseline = Mathf.Lerp(
-                    RightBaseline,
-                    rightCandidate,
-                    1f - Mathf.Exp(-baselineFallSpeed * sampleInterval)
-                );
+                RightBaseline = Mathf.Lerp(RightBaseline, rightCandidate, riseT);
+            else if (rightLooksOpen)
+                RightBaseline = Mathf.Lerp(RightBaseline, rightCandidate, fallT);
         }
 
         LeftBaseline = Mathf.Max(LeftBaseline, minBaseline);
@@ -217,74 +257,167 @@ public class EyeRegionTracker : MonoBehaviour
 
         float smoothT = 1f - Mathf.Exp(-smoothingSpeed * sampleInterval);
 
-        LeftSmooth01 = Mathf.Lerp(LeftSmooth01, LeftNorm01, smoothT);
-        RightSmooth01 = Mathf.Lerp(RightSmooth01, RightNorm01, smoothT);
+        if (LeftSmooth01 <= 0f) LeftSmooth01 = LeftNorm01;
+        else LeftSmooth01 = Mathf.Lerp(LeftSmooth01, LeftNorm01, smoothT);
+
+        if (RightSmooth01 <= 0f) RightSmooth01 = RightNorm01;
+        else RightSmooth01 = Mathf.Lerp(RightSmooth01, RightNorm01, smoothT);
+
         Smoothed01 = 0.5f * (LeftSmooth01 + RightSmooth01);
+
+        StrongerEye01 = Mathf.Max(LeftSmooth01, RightSmooth01);
+        WeakerEye01 = Mathf.Min(LeftSmooth01, RightSmooth01);
+        ClosureDepth01 = 1f - Smoothed01;
     }
 
     void UpdateBlinkState()
     {
+        BlinkThisFrame = false;
+        CandidateAge = 0f;
+
         if (IsCalibrating)
         {
             EyesClosed = false;
+            blinkPhase = BlinkPhase.Idle;
+            closedMinCombined01 = 1f;
             return;
         }
 
-        float weakerEye = Mathf.Min(LeftSmooth01, RightSmooth01);
+        bool inCooldown = Time.unscaledTime - lastBlinkTime < blinkCooldown;
 
-        bool closedNow =
-            Smoothed01 < closedThreshold01 &&
-            weakerEye < (closedThreshold01 + 0.08f);
+        bool candidateEnterNow =
+            Smoothed01 < closedThreshold01 ||
+            (WeakerEye01 < Mathf.Min(closedThreshold01 + closeSupportMargin01, reopenThreshold01 - 0.02f) &&
+             Smoothed01 < reopenThreshold01 - 0.02f);
+
+        bool fullyClosedNow =
+            Smoothed01 < (closedThreshold01 - 0.02f) ||
+            WeakerEye01 < closedThreshold01;
 
         bool reopenedNow =
-            Smoothed01 > reopenThreshold01 &&
-            weakerEye > (reopenThreshold01 - 0.14f);
+            Smoothed01 > reopenThreshold01 ||
+            (StrongerEye01 > (reopenThreshold01 - 0.04f) &&
+             WeakerEye01 > (reopenThreshold01 - reopenSupportMargin01));
 
-        if (!EyesClosed)
+        switch (blinkPhase)
         {
-            if (closedNow)
-            {
-                EyesClosed = true;
-                closedStartTime = Time.unscaledTime;
-                closedMinCombined01 = Smoothed01;
-            }
-        }
-        else
-        {
-            if (Smoothed01 < closedMinCombined01)
-                closedMinCombined01 = Smoothed01;
-
-            if (reopenedNow)
-            {
-                float closedDuration = Time.unscaledTime - closedStartTime;
-
-                bool reachedRequiredDepth =
-                    closedMinCombined01 <= (closedThreshold01 - minClosedDepthBelowThreshold);
-
-                bool validBlink =
-                    reachedRequiredDepth &&
-                    closedDuration >= minBlinkClosedTime &&
-                    closedDuration <= maxBlinkClosedTime &&
-                    Time.unscaledTime - lastBlinkTime >= blinkCooldown;
-
-                if (validBlink)
+            case BlinkPhase.Idle:
                 {
-                    BlinkCount++;
-                    BlinkThisFrame = true;
-                    lastBlinkTime = Time.unscaledTime;
+                    EyesClosed = false;
+                    closedMinCombined01 = 1f;
 
-                    if (logBlinkEvents)
+                    if (inCooldown)
                     {
-                        Debug.Log(
-                            $"Blink detected | count={BlinkCount} | duration={closedDuration:F3}s | " +
-                            $"L={LeftSmooth01:F3} | R={RightSmooth01:F3} | minCombined={closedMinCombined01:F3}"
-                        );
+                        LastBlinkDecision = "Cooldown";
+                        return;
                     }
+
+                    if (candidateEnterNow)
+                    {
+                        blinkPhase = BlinkPhase.Candidate;
+                        candidateStartTime = Time.unscaledTime;
+                        closedStartTime = candidateStartTime;
+                        closedMinCombined01 = Smoothed01;
+                        LastBlinkDecision = "Candidate";
+                    }
+
+                    break;
                 }
 
-                EyesClosed = false;
-                closedMinCombined01 = 1f;
-            }
+            case BlinkPhase.Candidate:
+                {
+                    CandidateAge = Time.unscaledTime - candidateStartTime;
+                    closedMinCombined01 = Mathf.Min(closedMinCombined01, Smoothed01);
+
+                    if (reopenedNow)
+                    {
+                        LastBlinkDecision = "Rejected: too shallow";
+                        blinkPhase = BlinkPhase.Idle;
+                        closedMinCombined01 = 1f;
+                        return;
+                    }
+
+                    if (fullyClosedNow)
+                    {
+                        blinkPhase = BlinkPhase.Closed;
+                        EyesClosed = true;
+                        LastBlinkDecision = "Closed";
+                        return;
+                    }
+
+                    if (CandidateAge > maxCloseBuildTime)
+                    {
+                        LastBlinkDecision = "Rejected: never got deep enough";
+                        blinkPhase = BlinkPhase.Idle;
+                        closedMinCombined01 = 1f;
+                    }
+
+                    break;
+                }
+
+            case BlinkPhase.Closed:
+                {
+                    EyesClosed = true;
+                    CandidateAge = Time.unscaledTime - candidateStartTime;
+                    closedMinCombined01 = Mathf.Min(closedMinCombined01, Smoothed01);
+
+                    if (reopenedNow)
+                    {
+                        float closedDuration = Time.unscaledTime - closedStartTime;
+                        float closureDepth = 1f - closedMinCombined01;
+
+                        bool reachedRequiredDepth =
+                            closedMinCombined01 <= (closedThreshold01 - minClosedDepthBelowThreshold);
+
+                        bool validBlink =
+                            reachedRequiredDepth &&
+                            closedDuration >= minBlinkClosedTime &&
+                            closedDuration <= maxBlinkClosedTime &&
+                            !inCooldown;
+
+                        if (validBlink)
+                        {
+                            BlinkCount++;
+                            BlinkThisFrame = true;
+                            lastBlinkTime = Time.unscaledTime;
+                            LastBlinkDecision = $"Blink accepted ({closedDuration:F3}s, depth={closureDepth:F3})";
+
+                            if (logBlinkEvents)
+                            {
+                                Debug.Log(
+                                    $"Blink detected | count={BlinkCount} | duration={closedDuration:F3}s | " +
+                                    $"L={LeftSmooth01:F3} | R={RightSmooth01:F3} | minCombined={closedMinCombined01:F3}"
+                                );
+                            }
+                        }
+                        else
+                        {
+                            if (!reachedRequiredDepth)
+                                LastBlinkDecision = "Rejected: too shallow";
+                            else if (closedDuration < minBlinkClosedTime)
+                                LastBlinkDecision = "Rejected: too fast";
+                            else if (closedDuration > maxBlinkClosedTime)
+                                LastBlinkDecision = "Rejected: too long";
+                            else
+                                LastBlinkDecision = "Rejected: cooldown";
+                        }
+
+                        EyesClosed = false;
+                        blinkPhase = BlinkPhase.Idle;
+                        closedMinCombined01 = 1f;
+                        return;
+                    }
+
+                    if (CandidateAge > maxBlinkClosedTime)
+                    {
+                        LastBlinkDecision = "Rejected: never reopened";
+                        EyesClosed = false;
+                        blinkPhase = BlinkPhase.Idle;
+                        closedMinCombined01 = 1f;
+                    }
+
+                    break;
+                }
         }
     }
 
@@ -447,12 +580,24 @@ public class EyeRegionTracker : MonoBehaviour
         LeftBaseline = 0f;
         RightBaseline = 0f;
 
+        StrongerEye01 = 0f;
+        WeakerEye01 = 0f;
+        ClosureDepth01 = 0f;
+        CandidateAge = 0f;
+
         EyesClosed = false;
         BlinkThisFrame = false;
         IsCalibrating = false;
 
+        blinkPhase = BlinkPhase.Idle;
+        LastBlinkDecision = "Reset";
+
         trackingStartTime = -1f;
+        candidateStartTime = 0f;
+        closedStartTime = 0f;
         closedMinCombined01 = 1f;
+        lastGoodSampleTime = -999f;
+        lastBlinkTime = -999f;
 
         if (clearBlinkCount)
             BlinkCount = 0;
@@ -480,9 +625,12 @@ public class EyeRegionTracker : MonoBehaviour
             $"LNorm:{LeftNorm01:F3}  RNorm:{RightNorm01:F3}  Norm:{Combined01:F3}\n" +
             $"LSmooth:{LeftSmooth01:F3}  RSmooth:{RightSmooth01:F3}  Smooth:{Smoothed01:F3}\n" +
             $"LBase:{LeftBaseline:F6}  RBase:{RightBaseline:F6}  Calibrating:{IsCalibrating}\n" +
-            $"Closed:{EyesClosed}  BlinkThisFrame:{BlinkThisFrame}  BlinkCount:{BlinkCount}";
+            $"Stronger:{StrongerEye01:F3}  Weaker:{WeakerEye01:F3}  Depth:{ClosureDepth01:F3}\n" +
+            $"Phase:{BlinkPhaseName}  CandAge:{CandidateAge:F3}  MinComb:{closedMinCombined01:F3}\n" +
+            $"Closed:{EyesClosed}  BlinkThisFrame:{BlinkThisFrame}  BlinkCount:{BlinkCount}\n" +
+            $"LastDecision:{LastBlinkDecision}";
 
-        GUI.Label(new Rect(10, 50, 1700, 240), text, debugTextStyle);
+        GUI.Label(new Rect(10, 50, 1800, 320), text, debugTextStyle);
 
         if (showEyeSamplePreview)
         {
@@ -490,10 +638,10 @@ public class EyeRegionTracker : MonoBehaviour
             float h = sampleHeight * 8f;
 
             if (leftEyeTex != null)
-                GUI.DrawTexture(new Rect(10, 240, w, h), leftEyeTex, ScaleMode.StretchToFill, false);
+                GUI.DrawTexture(new Rect(10, 280, w, h), leftEyeTex, ScaleMode.StretchToFill, false);
 
             if (rightEyeTex != null)
-                GUI.DrawTexture(new Rect(30 + w, 240, w, h), rightEyeTex, ScaleMode.StretchToFill, false);
+                GUI.DrawTexture(new Rect(30 + w, 280, w, h), rightEyeTex, ScaleMode.StretchToFill, false);
         }
     }
 

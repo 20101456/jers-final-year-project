@@ -166,11 +166,11 @@ public class FaceDebugDraw : MonoBehaviour
     }
 
     bool TryBuildEyeRects(
-        BlazeFaceSentis.FaceDet det,
-        out Rect leftEye,
-        out Rect rightEye,
-        out Vector2 leftCenter,
-        out Vector2 rightCenter)
+    BlazeFaceSentis.FaceDet det,
+    out Rect leftEye,
+    out Rect rightEye,
+    out Vector2 leftCenter,
+    out Vector2 rightCenter)
     {
         leftEye = default;
         rightEye = default;
@@ -180,49 +180,66 @@ public class FaceDebugDraw : MonoBehaviour
         if (det.kp01 == null || det.kp01.Length < 2)
             return false;
 
-        // Common BlazeFace layout uses the first two sparse keypoints as eye anchors.
-        // We sort by x so "left" and "right" mean screen-left and screen-right.
+        // Expand the face rect a little so the derived eye layout is less cramped.
+        Rect face = ExpandRect01(det.faceRect01, 1.10f, 1.12f);
+
+        float faceW = face.width;
+        float faceH = face.height;
+
+        if (faceW <= 0f || faceH <= 0f)
+            return false;
+
+        // BlazeFace commonly uses kp[0] and kp[1] as eye anchors.
         Vector2 a = det.kp01[0];
         Vector2 b = det.kp01[1];
 
-        if (a.x <= b.x)
-        {
-            leftCenter = a;
-            rightCenter = b;
-        }
-        else
-        {
-            leftCenter = b;
-            rightCenter = a;
-        }
+        Vector2 kpLeft = a.x <= b.x ? a : b;
+        Vector2 kpRight = a.x <= b.x ? b : a;
 
-        float faceW = det.faceRect01.width;
-        float faceH = det.faceRect01.height;
-        float eyeSpacing = Mathf.Abs(rightCenter.x - leftCenter.x);
-
-
-        if (faceW <= 0f || faceH <= 0f || eyeSpacing <= 0.0001f)
+        float eyeSpacing = Mathf.Abs(kpRight.x - kpLeft.x);
+        if (eyeSpacing <= 0.0001f)
             return false;
+
+        // Expected eye positions from face geometry.
+        Vector2 expectedLeft = new Vector2(
+            face.xMin + faceW * 0.32f,
+            face.yMin + faceH * 0.40f
+        );
+
+        Vector2 expectedRight = new Vector2(
+            face.xMin + faceW * 0.68f,
+            face.yMin + faceH * 0.40f
+        );
+
+        // Blend detected keypoints with expected positions to reduce jitter / inward collapse.
+        const float kpWeight = 0.70f;
+        const float expectedWeight = 0.30f;
+
+        leftCenter = kpLeft * kpWeight + expectedLeft * expectedWeight;
+        rightCenter = kpRight * kpWeight + expectedRight * expectedWeight;
 
         float xSpread = eyeSpacing * eyeHorizontalSpreadFromEyeSpacing;
         leftCenter.x -= xSpread;
         rightCenter.x += xSpread;
 
+        float yOffset = faceH * eyeVerticalOffsetFromFaceHeight;
+        leftCenter.y += yOffset;
+        rightCenter.y += yOffset;
+
+        float eyeWFromSpacing = eyeSpacing * eyeWidthFromEyeSpacing;
+        float eyeWFromFace = faceW * 0.20f;
+
         float eyeW = Mathf.Clamp(
-            eyeSpacing * eyeWidthFromEyeSpacing,
-            faceW * 0.14f,
-            faceW * 0.40f
+            Mathf.Max(eyeWFromSpacing, eyeWFromFace),
+            faceW * 0.16f,
+            faceW * 0.42f
         );
 
         float eyeH = Mathf.Clamp(
             eyeW * eyeHeightFromEyeWidth,
             faceH * 0.08f,
-            faceH * 0.26f
+            faceH * 0.22f
         );
-
-        float yOffset = faceH * eyeVerticalOffsetFromFaceHeight;
-        leftCenter.y += yOffset;
-        rightCenter.y += yOffset;
 
         leftEye = ClampRect01(new Rect(
             leftCenter.x - eyeW * 0.5f,
@@ -317,5 +334,19 @@ public class FaceDebugDraw : MonoBehaviour
         GUI.DrawTexture(new Rect(r.x, r.yMax - t, r.width, t), whiteTex);
         GUI.DrawTexture(new Rect(r.x, r.y, t, r.height), whiteTex);
         GUI.DrawTexture(new Rect(r.xMax - t, r.y, t, r.height), whiteTex);
+    }
+
+    Rect ExpandRect01(Rect r, float widthScale, float heightScale)
+    {
+        Vector2 c = r.center;
+        float w = r.width * widthScale;
+        float h = r.height * heightScale;
+
+        return ClampRect01(new Rect(
+            c.x - w * 0.5f,
+            c.y - h * 0.5f,
+            w,
+            h
+        ));
     }
 }

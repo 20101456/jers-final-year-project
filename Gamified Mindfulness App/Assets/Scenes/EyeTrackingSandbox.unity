@@ -158,11 +158,11 @@ MonoBehaviour:
   showStatus: 1
   drawCenterTestMarker: 1
   drawEyeRegions: 1
-  eyeWidthFromEyeSpacing: 0.78
-  eyeHeightFromEyeWidth: 0.62
-  eyeVerticalOffsetFromFaceHeight: 0.06
-  eyeHorizontalSpreadFromEyeSpacing: 0.2
-  lineThickness: 3.5
+  eyeWidthFromEyeSpacing: 0.72
+  eyeHeightFromEyeWidth: 0.48
+  eyeVerticalOffsetFromFaceHeight: 0.01
+  eyeHorizontalSpreadFromEyeSpacing: 0.22
+  lineThickness: 3
   labelKeypointIndices: 1
 --- !u!114 &383490681
 MonoBehaviour:
@@ -241,6 +241,11 @@ MonoBehaviour:
   autoTrackOpenBaseline: 1
   baselineFallSpeed: 0.75
   minBaseline: 0.01
+  lostTrackingResetDelay: 0.25
+  baselineTrackGate01: 0.94
+  closeSupportMargin01: 0.1
+  reopenSupportMargin01: 0.18
+  maxCloseBuildTime: 0.12
   showDebugOverlay: 1
   showEyeSamplePreview: 1
   logBlinkEvents: 1

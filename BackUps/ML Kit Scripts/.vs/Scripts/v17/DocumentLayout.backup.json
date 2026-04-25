@@ -1,0 +1,241 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "D:\\Github\\jers-final-year-project\\Gamified Mindfulness App\\Assets\\Scripts\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|D:\\Github\\jers-final-year-project\\Gamified Mindfulness App\\Assets\\Scripts\\BlinkCameraFeed.cs||{3B902123-F8A7-4915-9F01-361F908088D0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:BlinkCameraFeed.cs||{3B902123-F8A7-4915-9F01-361F908088D0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|D:\\Github\\jers-final-year-project\\Gamified Mindfulness App\\Assets\\Scripts\\EncounterTrigger.cs||{3B902123-F8A7-4915-9F01-361F908088D0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:EncounterTrigger.cs||{3B902123-F8A7-4915-9F01-361F908088D0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|D:\\Github\\jers-final-year-project\\Gamified Mindfulness App\\Assets\\Scripts\\RouteWalker.cs||{3B902123-F8A7-4915-9F01-361F908088D0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:RouteWalker.cs||{3B902123-F8A7-4915-9F01-361F908088D0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|D:\\Github\\jers-final-year-project\\Gamified Mindfulness App\\Assets\\Scripts\\RaycastView.cs||{3B902123-F8A7-4915-9F01-361F908088D0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:RaycastView.cs||{3B902123-F8A7-4915-9F01-361F908088D0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|D:\\Github\\jers-final-year-project\\Gamified Mindfulness App\\Assets\\Scripts\\MLKitBlinkSource.cs||{3B902123-F8A7-4915-9F01-361F908088D0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:MLKitBlinkSource.cs||{3B902123-F8A7-4915-9F01-361F908088D0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|D:\\Github\\jers-final-year-project\\Gamified Mindfulness App\\Assets\\Scripts\\MindfulnessEncounterController.cs||{3B902123-F8A7-4915-9F01-361F908088D0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:MindfulnessEncounterController.cs||{3B902123-F8A7-4915-9F01-361F908088D0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|D:\\Github\\jers-final-year-project\\Gamified Mindfulness App\\Assets\\Scripts\\IBlinkSource.cs||{3B902123-F8A7-4915-9F01-361F908088D0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:IBlinkSource.cs||{3B902123-F8A7-4915-9F01-361F908088D0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|D:\\Github\\jers-final-year-project\\Gamified Mindfulness App\\Assets\\Scripts\\GridMap1.cs||{3B902123-F8A7-4915-9F01-361F908088D0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:GridMap1.cs||{3B902123-F8A7-4915-9F01-361F908088D0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|D:\\Github\\jers-final-year-project\\Gamified Mindfulness App\\Assets\\Scripts\\FireflyVisual.cs||{3B902123-F8A7-4915-9F01-361F908088D0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:FireflyVisual.cs||{3B902123-F8A7-4915-9F01-361F908088D0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|D:\\Github\\jers-final-year-project\\Gamified Mindfulness App\\Assets\\Scripts\\EncounterLoader.cs||{3B902123-F8A7-4915-9F01-361F908088D0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:EncounterLoader.cs||{3B902123-F8A7-4915-9F01-361F908088D0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|D:\\Github\\jers-final-year-project\\Gamified Mindfulness App\\Assets\\Scripts\\EncounterBus.cs||{3B902123-F8A7-4915-9F01-361F908088D0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:EncounterBus.cs||{3B902123-F8A7-4915-9F01-361F908088D0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|D:\\Github\\jers-final-year-project\\Gamified Mindfulness App\\Assets\\Scripts\\DebugBlinkSource.cs||{3B902123-F8A7-4915-9F01-361F908088D0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:DebugBlinkSource.cs||{3B902123-F8A7-4915-9F01-361F908088D0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|D:\\Github\\jers-final-year-project\\Gamified Mindfulness App\\Assets\\Scripts\\CameraPreview.cs||{3B902123-F8A7-4915-9F01-361F908088D0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:CameraPreview.cs||{3B902123-F8A7-4915-9F01-361F908088D0}"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 12,
+          "Children": [
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "RouteWalker.cs",
+              "DocumentMoniker": "D:\\Github\\jers-final-year-project\\Gamified Mindfulness App\\Assets\\Scripts\\RouteWalker.cs",
+              "RelativeDocumentMoniker": "RouteWalker.cs",
+              "ToolTip": "D:\\Github\\jers-final-year-project\\Gamified Mindfulness App\\Assets\\Scripts\\RouteWalker.cs",
+              "RelativeToolTip": "RouteWalker.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAA0AAAAYAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-02-23T01:36:40.355Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 3,
+              "Title": "RaycastView.cs",
+              "DocumentMoniker": "D:\\Github\\jers-final-year-project\\Gamified Mindfulness App\\Assets\\Scripts\\RaycastView.cs",
+              "RelativeDocumentMoniker": "RaycastView.cs",
+              "ToolTip": "D:\\Github\\jers-final-year-project\\Gamified Mindfulness App\\Assets\\Scripts\\RaycastView.cs",
+              "RelativeToolTip": "RaycastView.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-02-23T01:36:39.142Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 4,
+              "Title": "MLKitBlinkSource.cs",
+              "DocumentMoniker": "D:\\Github\\jers-final-year-project\\Gamified Mindfulness App\\Assets\\Scripts\\MLKitBlinkSource.cs",
+              "RelativeDocumentMoniker": "MLKitBlinkSource.cs",
+              "ToolTip": "D:\\Github\\jers-final-year-project\\Gamified Mindfulness App\\Assets\\Scripts\\MLKitBlinkSource.cs",
+              "RelativeToolTip": "MLKitBlinkSource.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-02-23T01:36:37.003Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 5,
+              "Title": "MindfulnessEncounterController.cs",
+              "DocumentMoniker": "D:\\Github\\jers-final-year-project\\Gamified Mindfulness App\\Assets\\Scripts\\MindfulnessEncounterController.cs",
+              "RelativeDocumentMoniker": "MindfulnessEncounterController.cs",
+              "ToolTip": "D:\\Github\\jers-final-year-project\\Gamified Mindfulness App\\Assets\\Scripts\\MindfulnessEncounterController.cs",
+              "RelativeToolTip": "MindfulnessEncounterController.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-02-23T01:36:35.613Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 6,
+              "Title": "IBlinkSource.cs",
+              "DocumentMoniker": "D:\\Github\\jers-final-year-project\\Gamified Mindfulness App\\Assets\\Scripts\\IBlinkSource.cs",
+              "RelativeDocumentMoniker": "IBlinkSource.cs",
+              "ToolTip": "D:\\Github\\jers-final-year-project\\Gamified Mindfulness App\\Assets\\Scripts\\IBlinkSource.cs",
+              "RelativeToolTip": "IBlinkSource.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-02-23T01:36:34.674Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 7,
+              "Title": "GridMap1.cs",
+              "DocumentMoniker": "D:\\Github\\jers-final-year-project\\Gamified Mindfulness App\\Assets\\Scripts\\GridMap1.cs",
+              "RelativeDocumentMoniker": "GridMap1.cs",
+              "ToolTip": "D:\\Github\\jers-final-year-project\\Gamified Mindfulness App\\Assets\\Scripts\\GridMap1.cs",
+              "RelativeToolTip": "GridMap1.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-02-23T01:36:33.473Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 8,
+              "Title": "FireflyVisual.cs",
+              "DocumentMoniker": "D:\\Github\\jers-final-year-project\\Gamified Mindfulness App\\Assets\\Scripts\\FireflyVisual.cs",
+              "RelativeDocumentMoniker": "FireflyVisual.cs",
+              "ToolTip": "D:\\Github\\jers-final-year-project\\Gamified Mindfulness App\\Assets\\Scripts\\FireflyVisual.cs",
+              "RelativeToolTip": "FireflyVisual.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-02-23T01:36:30.793Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "EncounterTrigger.cs",
+              "DocumentMoniker": "D:\\Github\\jers-final-year-project\\Gamified Mindfulness App\\Assets\\Scripts\\EncounterTrigger.cs",
+              "RelativeDocumentMoniker": "EncounterTrigger.cs",
+              "ToolTip": "D:\\Github\\jers-final-year-project\\Gamified Mindfulness App\\Assets\\Scripts\\EncounterTrigger.cs",
+              "RelativeToolTip": "EncounterTrigger.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-02-23T01:36:29.311Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 9,
+              "Title": "EncounterLoader.cs",
+              "DocumentMoniker": "D:\\Github\\jers-final-year-project\\Gamified Mindfulness App\\Assets\\Scripts\\EncounterLoader.cs",
+              "RelativeDocumentMoniker": "EncounterLoader.cs",
+              "ToolTip": "D:\\Github\\jers-final-year-project\\Gamified Mindfulness App\\Assets\\Scripts\\EncounterLoader.cs",
+              "RelativeToolTip": "EncounterLoader.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-02-23T01:36:27.976Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 10,
+              "Title": "EncounterBus.cs",
+              "DocumentMoniker": "D:\\Github\\jers-final-year-project\\Gamified Mindfulness App\\Assets\\Scripts\\EncounterBus.cs",
+              "RelativeDocumentMoniker": "EncounterBus.cs",
+              "ToolTip": "D:\\Github\\jers-final-year-project\\Gamified Mindfulness App\\Assets\\Scripts\\EncounterBus.cs",
+              "RelativeToolTip": "EncounterBus.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-02-23T01:36:26.947Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 11,
+              "Title": "DebugBlinkSource.cs",
+              "DocumentMoniker": "D:\\Github\\jers-final-year-project\\Gamified Mindfulness App\\Assets\\Scripts\\DebugBlinkSource.cs",
+              "RelativeDocumentMoniker": "DebugBlinkSource.cs",
+              "ToolTip": "D:\\Github\\jers-final-year-project\\Gamified Mindfulness App\\Assets\\Scripts\\DebugBlinkSource.cs",
+              "RelativeToolTip": "DebugBlinkSource.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-02-23T01:36:25.615Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 12,
+              "Title": "CameraPreview.cs",
+              "DocumentMoniker": "D:\\Github\\jers-final-year-project\\Gamified Mindfulness App\\Assets\\Scripts\\CameraPreview.cs",
+              "RelativeDocumentMoniker": "CameraPreview.cs",
+              "ToolTip": "D:\\Github\\jers-final-year-project\\Gamified Mindfulness App\\Assets\\Scripts\\CameraPreview.cs",
+              "RelativeToolTip": "CameraPreview.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-02-23T01:36:24.467Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "BlinkCameraFeed.cs",
+              "DocumentMoniker": "D:\\Github\\jers-final-year-project\\Gamified Mindfulness App\\Assets\\Scripts\\BlinkCameraFeed.cs",
+              "RelativeDocumentMoniker": "BlinkCameraFeed.cs",
+              "ToolTip": "D:\\Github\\jers-final-year-project\\Gamified Mindfulness App\\Assets\\Scripts\\BlinkCameraFeed.cs",
+              "RelativeToolTip": "BlinkCameraFeed.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABIAAAAFAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-02-23T01:36:12.539Z",
+              "EditorCaption": ""
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

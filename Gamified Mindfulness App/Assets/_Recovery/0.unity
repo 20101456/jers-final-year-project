@@ -228,17 +228,16 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::EyeRegionTracker
   cameraFeed: {fileID: 383490681}
   faceDebug: {fileID: 383490680}
-  sampleWidth: 48
-  sampleHeight: 24
+  sampleWidth: 24
+  sampleHeight: 12
   sampleInterval: 0.033
-  closedThreshold01: 0.7
-  reopenThreshold01: 0.88
-  smoothingSpeed: 18
+  closedThreshold01: 0.55
+  reopenThreshold01: 0.64
+  smoothingSpeed: 14
   minBlinkClosedTime: 0.03
-  maxBlinkClosedTime: 0.5
-  blinkCooldown: 0.12
-  minClosedDepthBelowThreshold: 0.01
-  rawChangeForClosed: 0.22
+  maxBlinkClosedTime: 0.35
+  blinkCooldown: 0.16
+  minClosedDepthBelowThreshold: 0.015
   calibrationDuration: 1.2
   autoTrackOpenBaseline: 1
   baselineFallSpeed: 0.35
@@ -247,7 +246,7 @@ MonoBehaviour:
   baselineTrackGate01: 0.95
   closeSupportMargin01: 0.05
   reopenSupportMargin01: 0.1
-  maxCloseBuildTime: 0.18
+  maxCloseBuildTime: 0.12
   showDebugOverlay: 1
   showEyeSamplePreview: 1
   logBlinkEvents: 1
@@ -256,7 +255,7 @@ MonoBehaviour:
   rectMoveRejectFrac: 0.18
   rectSizeRejectFrac: 0.15
   motionSuppressTime: 0.08
-  minOpenStableTime: 0.05
+  minOpenStableTime: 0.03
 --- !u!1 &1146774752
 GameObject:
   m_ObjectHideFlags: 0

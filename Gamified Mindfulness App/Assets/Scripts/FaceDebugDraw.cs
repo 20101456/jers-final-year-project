@@ -55,6 +55,9 @@ public class FaceDebugDraw : MonoBehaviour
 
     public bool labelKeypointIndices = true;
 
+    [Header("Eye Rect Stability")]
+    [Range(1f, 30f)] public float eyeRectSmoothSpeed = 14f;
+
     GUIStyle debugTextStyle;
     void EnsureDebugStyle()
     {
@@ -104,17 +107,52 @@ public class FaceDebugDraw : MonoBehaviour
             return;
         }
 
+        Rect newLeftEyeRect01, newRightEyeRect01;
+        Vector2 newLeftEyeCenter01, newRightEyeCenter01;
+
         hasEyeRegions = TryBuildEyeRects(
             cachedDet,
-            out leftEyeRect01,
-            out rightEyeRect01,
-            out leftEyeCenter01,
-            out rightEyeCenter01
+            out newLeftEyeRect01,
+            out newRightEyeRect01,
+            out newLeftEyeCenter01,
+            out newRightEyeCenter01
         );
+
+        if (hasEyeRegions)
+        {
+            float t = 1f - Mathf.Exp(-eyeRectSmoothSpeed * Time.unscaledDeltaTime);
+
+            if (leftEyeRect01.width <= 0f || rightEyeRect01.width <= 0f)
+            {
+                leftEyeRect01 = newLeftEyeRect01;
+                rightEyeRect01 = newRightEyeRect01;
+            }
+            else
+            {
+                leftEyeRect01 = SmoothRect(leftEyeRect01, newLeftEyeRect01, t);
+                rightEyeRect01 = SmoothRect(rightEyeRect01, newRightEyeRect01, t);
+            }
+
+            leftEyeCenter01 = leftEyeRect01.center;
+            rightEyeCenter01 = rightEyeRect01.center;
+        }
 
         statusText = hasEyeRegions
             ? $"Face detected. Score: {cachedDet.score:F3} | Eye regions ready"
             : $"Face detected. Score: {cachedDet.score:F3} | Eye regions unavailable";
+
+        Rect SmoothRect(Rect current, Rect target, float t)
+        {
+            Vector2 center = Vector2.Lerp(current.center, target.center, t);
+            Vector2 size = Vector2.Lerp(current.size, target.size, t);
+
+            return new Rect(
+                center.x - size.x * 0.5f,
+                center.y - size.y * 0.5f,
+                size.x,
+                size.y
+            );
+        }
     }
 
     void OnGUI()

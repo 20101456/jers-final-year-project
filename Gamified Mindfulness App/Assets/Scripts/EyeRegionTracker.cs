@@ -621,11 +621,12 @@ public class EyeRegionTracker : MonoBehaviour
         if (pixels == null || pixels.Length < width * height || width < 4 || height < 4)
             return 0f;
 
-        int x0 = Mathf.Clamp(Mathf.RoundToInt(width * 0.08f), 0, width - 1);
-        int x1 = Mathf.Clamp(Mathf.RoundToInt(width * 0.92f), x0 + 1, width);
+        // Ignore the very edges of the sample box.
+        int x0 = Mathf.Clamp(Mathf.RoundToInt(width * 0.10f), 0, width - 1);
+        int x1 = Mathf.Clamp(Mathf.RoundToInt(width * 0.90f), x0 + 1, width);
 
-        int y0 = Mathf.Clamp(Mathf.RoundToInt(height * 0.10f), 0, height - 1);
-        int y1 = Mathf.Clamp(Mathf.RoundToInt(height * 0.82f), y0 + 1, height);
+        int y0 = Mathf.Clamp(Mathf.RoundToInt(height * 0.12f), 0, height - 1);
+        int y1 = Mathf.Clamp(Mathf.RoundToInt(height * 0.88f), y0 + 1, height);
 
         int roiW = x1 - x0;
         int roiH = y1 - y0;
@@ -633,9 +634,9 @@ public class EyeRegionTracker : MonoBehaviour
         if (roiW <= 0 || roiH <= 0)
             return 0f;
 
-        float minLuma = 255f;
-        float maxLuma = 0f;
-        float sumLuma = 0f;
+        // First pass: calculate the local average brightness.
+        // This makes the detector care less about the room being bright/dark.
+        float sum = 0f;
         int count = 0;
 
         for (int y = y0; y < y1; y++)
@@ -644,10 +645,7 @@ public class EyeRegionTracker : MonoBehaviour
 
             for (int x = x0; x < x1; x++)
             {
-                float l = Luma(pixels[row + x]);
-                minLuma = Mathf.Min(minLuma, l);
-                maxLuma = Mathf.Max(maxLuma, l);
-                sumLuma += l;
+                sum += Luma(pixels[row + x]);
                 count++;
             }
         }
@@ -655,62 +653,93 @@ public class EyeRegionTracker : MonoBehaviour
         if (count <= 0)
             return 0f;
 
-        float meanLuma = sumLuma / count;
-        float contrast = maxLuma - minLuma;
+        float mean = sum / count;
 
-        if (contrast < 5f)
-            return 0f;
+        // Second pass: calculate local contrast.
+        float varianceSum = 0f;
 
-        float darkThreshold = Mathf.Lerp(minLuma, meanLuma, 0.45f);
-
-        int darkPixelCount = 0;
-        int usefulColumns = 0;
-        float totalUsefulRun = 0f;
-
-        for (int x = x0; x < x1; x++)
+        for (int y = y0; y < y1; y++)
         {
-            int currentRun = 0;
-            int bestRunThisColumn = 0;
+            int row = y * width;
 
-            for (int y = y0; y < y1; y++)
+            for (int x = x0; x < x1; x++)
             {
-                float l = Luma(pixels[y * width + x]);
-                bool isDark = l <= darkThreshold;
-
-                if (isDark)
-                {
-                    darkPixelCount++;
-                    currentRun++;
-                    bestRunThisColumn = Mathf.Max(bestRunThisColumn, currentRun);
-                }
-                else
-                {
-                    currentRun = 0;
-                }
-            }
-
-            if (bestRunThisColumn >= 2)
-            {
-                totalUsefulRun += bestRunThisColumn;
-                usefulColumns++;
+                float d = Luma(pixels[row + x]) - mean;
+                varianceSum += d * d;
             }
         }
 
-        float darkArea01 = darkPixelCount / Mathf.Max(1f, (float)(roiW * roiH));
+        float std = Mathf.Sqrt(varianceSum / count);
 
-        float averageUsefulRun = usefulColumns > 0
-            ? totalUsefulRun / usefulColumns
-            : 0f;
+        // If the image has almost no contrast, we cannot confidently read the eye.
+        // Return a middle-ish value instead of pretending it is fully open or closed.
+        if (std < 3f)
+            return 0.5f;
 
-        float verticalBlob01 = averageUsefulRun / Mathf.Max(1f, roiH * 0.45f);
+        float[] rowDarkEnergy = new float[height];
 
-        float score =
-            verticalBlob01 * 0.75f +
-            Mathf.Clamp01(darkArea01 / 0.22f) * 0.25f;
+        // Third pass: find pixels that are dark relative to the local eye crop.
+        // This is the important change: it uses relative darkness, not absolute light level.
+        for (int y = y0; y < y1; y++)
+        {
+            float rowEnergy = 0f;
+            int row = y * width;
 
-        float contrastConfidence = Mathf.Clamp01(contrast / 45f);
+            for (int x = x0; x < x1; x++)
+            {
+                float l = Luma(pixels[row + x]);
 
-        return Mathf.Clamp01(score * contrastConfidence);
+                // Positive when this pixel is darker than the local average.
+                float darkAmount = Mathf.Clamp01((mean - l) / (std * 1.25f));
+
+                rowEnergy += darkAmount;
+            }
+
+            rowDarkEnergy[y] = rowEnergy / roiW;
+        }
+
+        // Find the strongest dark row. In an open eye this should come from iris/pupil.
+        float maxRowEnergy = 0f;
+
+        for (int y = y0; y < y1; y++)
+            maxRowEnergy = Mathf.Max(maxRowEnergy, rowDarkEnergy[y]);
+
+        if (maxRowEnergy <= 0.02f)
+            return 0.5f;
+
+        // Measure how many vertical rows contain meaningful dark eye detail.
+        // Open eye: iris/pupil creates a taller vertical dark region.
+        // Closed eye: eyelid/eyelash line is usually much flatter/thinner.
+        float threshold = maxRowEnergy * 0.38f;
+
+        int firstActiveRow = -1;
+        int lastActiveRow = -1;
+
+        for (int y = y0; y < y1; y++)
+        {
+            if (rowDarkEnergy[y] >= threshold)
+            {
+                if (firstActiveRow < 0)
+                    firstActiveRow = y;
+
+                lastActiveRow = y;
+            }
+        }
+
+        if (firstActiveRow < 0 || lastActiveRow < 0)
+            return 0.5f;
+
+        float activeHeight = lastActiveRow - firstActiveRow + 1;
+
+        // Convert vertical dark feature height into a 0-1 openness score.
+        float openness = activeHeight / Mathf.Max(1f, roiH * 0.55f);
+
+        // Add a small confidence factor so noisy/flat crops do not jump around too much.
+        float contrastConfidence = Mathf.Clamp01(std / 18f);
+
+        openness = Mathf.Lerp(0.5f, openness, contrastConfidence);
+
+        return Mathf.Clamp01(openness);
     }
 
     float Luma(Color32 c)
@@ -847,7 +876,10 @@ public class EyeRegionTracker : MonoBehaviour
 
         EnsureDebugStyle();
 
-        float y = Mathf.Max(20f, Screen.height - 430f);
+        // Positioned under the eye/blink counter area instead of at the bottom.
+        // On a tall portrait phone screen this should sit around the upper-left/middle area.
+        float x = 10f;
+        float y = Screen.height * 0.22f;
 
         string text =
             $"EyeTracker | {LastSampleStatus} | Phase:{BlinkPhaseName}\n" +
@@ -855,19 +887,21 @@ public class EyeRegionTracker : MonoBehaviour
             $"BlinkCount:{BlinkCount} | MotionIgnored:{MotionSuppressed} | Calibrating:{IsCalibrating}\n" +
             $"Decision: {LastBlinkDecision}";
 
-        GUI.Label(new Rect(10, y, Screen.width - 20, 180), text, debugTextStyle);
+        GUI.Label(new Rect(x, y, Screen.width - 20, 180), text, debugTextStyle);
 
         if (showEyeSamplePreview)
         {
             float w = sampleWidth * 8f;
             float h = sampleHeight * 8f;
-            float previewY = y + 170f;
+
+            // Put the eye sample boxes directly below the debug text.
+            float previewY = y + 160f;
 
             if (leftEyeTex != null)
-                GUI.DrawTexture(new Rect(10, previewY, w, h), leftEyeTex, ScaleMode.StretchToFill, false);
+                GUI.DrawTexture(new Rect(x, previewY, w, h), leftEyeTex, ScaleMode.StretchToFill, false);
 
             if (rightEyeTex != null)
-                GUI.DrawTexture(new Rect(30 + w, previewY, w, h), rightEyeTex, ScaleMode.StretchToFill, false);
+                GUI.DrawTexture(new Rect(x + w + 20f, previewY, w, h), rightEyeTex, ScaleMode.StretchToFill, false);
         }
     }
 

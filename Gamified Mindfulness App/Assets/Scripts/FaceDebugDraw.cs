@@ -6,13 +6,13 @@ public class FaceDebugDraw : MonoBehaviour
     public BlazeFaceSentis detector;
 
     [Header("Face Debug")]
-    public bool drawFaceBox = true;
-    public bool drawKeypoints = true;
-    public bool showStatus = true;
+    public bool drawFaceBox = false;
+    public bool drawKeypoints = false;
+    public bool showStatus = false;
     public bool drawCenterTestMarker = false;
 
     [Header("Eye Debug")]
-    public bool drawEyeRegions = true;
+    public bool drawEyeRegions = false;
 
     [Tooltip("Eye box width is based on the distance between the two eye anchors.")]
     [Range(0.4f, 1.2f)] public float eyeWidthFromEyeSpacing = 0.65f;

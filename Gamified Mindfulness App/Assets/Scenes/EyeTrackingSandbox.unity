@@ -230,17 +230,17 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::FaceDebugDraw
   cameraFeed: {fileID: 383490681}
   detector: {fileID: 1238313147}
-  drawFaceBox: 1
-  drawKeypoints: 1
-  showStatus: 1
-  drawCenterTestMarker: 1
-  drawEyeRegions: 1
+  drawFaceBox: 0
+  drawKeypoints: 0
+  showStatus: 0
+  drawCenterTestMarker: 0
+  drawEyeRegions: 0
   eyeWidthFromEyeSpacing: 0.72
   eyeHeightFromEyeWidth: 0.58
   eyeVerticalOffsetFromFaceHeight: 0.03
   eyeHorizontalSpreadFromEyeSpacing: 0.2
   lineThickness: 3
-  labelKeypointIndices: 1
+  labelKeypointIndices: 0
   eyeRectSmoothSpeed: 10
 --- !u!114 &383490681
 MonoBehaviour:
@@ -307,21 +307,21 @@ MonoBehaviour:
   sampleWidth: 32
   sampleHeight: 14
   sampleInterval: 0.033
-  eyeRectWidthMultiplier: 1.55
-  eyeRectHeightMultiplier: 0.65
-  eyeRectYOffset: -0.015
+  eyeRectWidthMultiplier: 1.14
+  eyeRectHeightMultiplier: 0.48
+  eyeRectYOffset: -0.02
   calibrationDuration: 1
-  closedThreshold01: 0.7
-  reopenThreshold01: 0.86
-  smoothingSpeed: 18
-  minBlinkClosedTime: 0.04
-  maxBlinkClosedTime: 0.45
-  blinkCooldown: 0.18
-  minOpenStableTime: 0.12
+  closedThreshold01: 0.83
+  reopenThreshold01: 0.87
+  smoothingSpeed: 13.9
+  minBlinkClosedTime: 0.03
+  maxBlinkClosedTime: 0.25
+  blinkCooldown: 0.15
+  minOpenStableTime: 0.075
   requireBothEyesClosed: 1
-  minBaseline: 0.01
-  baselineRiseSpeed: 8
-  baselineFallSpeed: 0.2
+  minBaseline: 0.005
+  baselineRiseSpeed: 10
+  baselineFallSpeed: 1
   useMotionGuard: 1
   rectMoveRejectFrac: 0.25
   rectSizeRejectFrac: 0.25
@@ -1161,8 +1161,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RabbitEncounterController
   eyeTracker: {fileID: 383490684}
-  passSeconds: 20
-  allowedBlinks: 20
+  passSeconds: 30
+  allowedBlinks: 5
   startupCalibrationSeconds: 3
   resetTimerOnBlink: 1
   startAutomatically: 1

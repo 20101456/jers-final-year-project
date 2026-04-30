@@ -11,90 +11,46 @@ public class EyeRegionTracker : MonoBehaviour
     [Range(0.01f, 0.2f)] public float sampleInterval = 0.033f;
 
     [Header("Eye Crop Adjustment")]
-    [Tooltip("Widen the eye crop so the inner and outer corners are included.")]
     [Range(0.5f, 3f)] public float eyeRectWidthMultiplier = 1.55f;
-
-    [Tooltip("Reduce this if the crop shows too much cheek/cheekbone.")]
     [Range(0.3f, 2f)] public float eyeRectHeightMultiplier = 0.65f;
+    [Range(-0.1f, 0.1f)] public float eyeRectYOffset = 0.005f;
 
-    [Tooltip("Negative moves the crop upward. Positive moves it downward.")]
-    [Range(-0.1f, 0.1f)] public float eyeRectYOffset = -0.015f;
-
-    [Header("Blink Detection")]
-    [Tooltip("Keep eyes open during this startup period so the open-eye baseline can be learned.")]
+    [Header("Calibration")]
+    [Tooltip("User should keep eyes open during this time.")]
     [Range(0.2f, 3f)] public float calibrationDuration = 1.0f;
 
-    [Tooltip("Normalised eye openness below this counts as closed.")]
-    [Range(0.2f, 0.95f)] public float closedThreshold01 = 0.70f;
+    [Header("Template Blink Detection")]
+    [Tooltip("Higher = less sensitive. If real blinks are missed, lower this slightly.")]
+    [Range(0.05f, 0.6f)] public float closedDifferenceThreshold = 0.22f;
 
-    [Tooltip("Normalised eye openness above this counts as open again.")]
-    [Range(0.3f, 1f)] public float reopenThreshold01 = 0.86f;
+    [Tooltip("Current eye must return below this value to count as reopened.")]
+    [Range(0.02f, 0.5f)] public float reopenDifferenceThreshold = 0.13f;
 
-    [Tooltip("How quickly the openness value smooths. Higher = faster response.")]
     [Range(1f, 40f)] public float smoothingSpeed = 18f;
 
     [Tooltip("A blink shorter than this is ignored.")]
     [Range(0.01f, 0.25f)] public float minBlinkClosedTime = 0.04f;
 
-    [Tooltip("A blink longer than this is treated as a long eye closure, not a normal blink.")]
+    [Tooltip("A blink longer than this is treated as holding the eyes closed.")]
     [Range(0.05f, 1f)] public float maxBlinkClosedTime = 0.45f;
 
-    [Tooltip("Prevents one blink being counted multiple times.")]
     [Range(0.05f, 0.5f)] public float blinkCooldown = 0.18f;
 
-    [Tooltip("The eyes must be open/stable before another blink can be counted.")]
+    [Tooltip("Eyes must look open/stable before a new blink can be counted.")]
     [Range(0.02f, 0.5f)] public float minOpenStableTime = 0.12f;
-
-    [Tooltip("Safer for this project. A blink should affect both eyes, while head movement often affects one crop more than the other.")]
-    public bool requireBothEyesClosed = true;
-
-    [Header("Open Baseline Tracking")]
-    [Range(0.001f, 0.2f)] public float minBaseline = 0.01f;
-
-    [Tooltip("How quickly the open-eye baseline rises when a stronger open-eye sample is seen.")]
-    [Range(1f, 20f)] public float baselineRiseSpeed = 8f;
-
-    [Tooltip("How slowly the open-eye baseline can fall while eyes are open. Lower is safer.")]
-    [Range(0.01f, 2f)] public float baselineFallSpeed = 0.15f;
 
     [Header("Motion Guard")]
     public bool useMotionGuard = true;
 
-    [Tooltip("If eye rectangles move too much between samples, ignore blink detection briefly.")]
-    [Range(0.05f, 0.6f)] public float rectMoveRejectFrac = 0.25f;
-
-    [Tooltip("If eye rectangles change size too much between samples, ignore blink detection briefly.")]
+    [Range(0.05f, 0.6f)] public float rectMoveRejectFrac = 0.20f;
     [Range(0.05f, 0.6f)] public float rectSizeRejectFrac = 0.25f;
-
-    [Range(0.01f, 0.4f)] public float motionSuppressTime = 0.12f;
+    [Range(0.01f, 0.4f)] public float motionSuppressTime = 0.16f;
 
     [Header("Debug")]
     public bool showDebugOverlay = true;
     public bool showEyeSamplePreview = true;
     public bool logBlinkEvents = false;
     [Range(16, 48)] public int debugFontSize = 26;
-
-    public float LeftRaw { get; private set; }
-    public float RightRaw { get; private set; }
-    public float CombinedRaw { get; private set; }
-
-    public float LeftBaseline { get; private set; }
-    public float RightBaseline { get; private set; }
-    public float OpenBaseline => 0.5f * (LeftBaseline + RightBaseline);
-
-    public float LeftNorm01 { get; private set; }
-    public float RightNorm01 { get; private set; }
-    public float Combined01 { get; private set; }
-
-    public float LeftSmooth01 { get; private set; }
-    public float RightSmooth01 { get; private set; }
-    public float Smoothed01 { get; private set; }
-
-    public float StrongerEye01 { get; private set; }
-    public float WeakerEye01 { get; private set; }
-    public float ClosureDepth01 { get; private set; }
-    public float LeftChange01 { get; private set; }
-    public float RightChange01 { get; private set; }
 
     public bool EyesClosed { get; private set; }
     public bool BlinkThisFrame { get; private set; }
@@ -106,19 +62,50 @@ public class EyeRegionTracker : MonoBehaviour
     public string LastBlinkDecision { get; private set; } = "None";
 
     public bool MotionSuppressed { get; private set; }
-    public float OpenStableAge { get; private set; }
     public bool BlinkArmed { get; private set; }
+    public float OpenStableAge { get; private set; }
+
+    public float LeftDifference01 { get; private set; }
+    public float RightDifference01 { get; private set; }
+    public float Difference01 { get; private set; }
+
+    public float LeftSmoothDifference01 { get; private set; }
+    public float RightSmoothDifference01 { get; private set; }
+    public float SmoothDifference01 { get; private set; }
+
+    // Compatibility values for your existing encounter/debug scripts.
+    public float LeftRaw => 1f - LeftSmoothDifference01;
+    public float RightRaw => 1f - RightSmoothDifference01;
+    public float CombinedRaw => 1f - SmoothDifference01;
+
+    public float LeftNorm01 => 1f - LeftSmoothDifference01;
+    public float RightNorm01 => 1f - RightSmoothDifference01;
+    public float Combined01 => 1f - SmoothDifference01;
+
+    public float LeftSmooth01 => 1f - LeftSmoothDifference01;
+    public float RightSmooth01 => 1f - RightSmoothDifference01;
+    public float Smoothed01 => 1f - SmoothDifference01;
+
+    public float LeftBaseline => 1f;
+    public float RightBaseline => 1f;
+    public float OpenBaseline => 1f;
+
+    public float StrongerEye01 => Mathf.Max(LeftSmooth01, RightSmooth01);
+    public float WeakerEye01 => Mathf.Min(LeftSmooth01, RightSmooth01);
+    public float ClosureDepth01 => SmoothDifference01;
+    public float LeftChange01 => LeftSmoothDifference01;
+    public float RightChange01 => RightSmoothDifference01;
+
     public float CandidateAge { get; private set; }
-    public float ClosedMinCombined01 => closedMinCombined01;
+    public float ClosedMinCombined01 => 1f - maxClosedDifference;
     public string BlinkPhaseName => phase.ToString();
 
-    // Kept as harmless compatibility stubs in case other scripts/debug UI referenced the old version.
-    public bool BaselineRecenterActive { get; private set; }
-    public bool TemplateReady { get; private set; }
-    public bool TemplateRecenterActive { get; private set; }
-    public float TemplateDiff01 { get; private set; }
-    public float LeftTemplateDiff01 { get; private set; }
-    public float RightTemplateDiff01 { get; private set; }
+    public bool BaselineRecenterActive => false;
+    public bool TemplateReady => templateReady;
+    public bool TemplateRecenterActive => false;
+    public float TemplateDiff01 => SmoothDifference01;
+    public float LeftTemplateDiff01 => LeftSmoothDifference01;
+    public float RightTemplateDiff01 => RightSmoothDifference01;
 
     enum BlinkPhase
     {
@@ -133,6 +120,14 @@ public class EyeRegionTracker : MonoBehaviour
     Texture2D leftEyeTex;
     Texture2D rightEyeTex;
 
+    float[] leftTemplate;
+    float[] rightTemplate;
+    float[] leftCurrent;
+    float[] rightCurrent;
+
+    bool templateReady;
+    int calibrationSampleCount;
+
     float nextSampleTime;
     float trackingStartTime = -1f;
     float lastGoodSampleTime = -999f;
@@ -140,7 +135,7 @@ public class EyeRegionTracker : MonoBehaviour
 
     float closedStartTime;
     float lastBlinkTime = -999f;
-    float closedMinCombined01 = 1f;
+    float maxClosedDifference;
 
     float openStableStartTime = -1f;
     float suppressBlinkUntil = -999f;
@@ -163,6 +158,7 @@ public class EyeRegionTracker : MonoBehaviour
     void Start()
     {
         CreateBuffers();
+        InvalidateTracking(true);
     }
 
     void Update()
@@ -212,8 +208,8 @@ public class EyeRegionTracker : MonoBehaviour
             return;
         }
 
-        bool leftOk = SampleEye(src, leftRect, leftEyeRT, leftEyeTex, out float leftScore, out string leftMsg);
-        bool rightOk = SampleEye(src, rightRect, rightEyeRT, rightEyeTex, out float rightScore, out string rightMsg);
+        bool leftOk = SampleEye(src, leftRect, leftEyeRT, leftEyeTex, leftCurrent, out string leftMsg);
+        bool rightOk = SampleEye(src, rightRect, rightEyeRT, rightEyeTex, rightCurrent, out string rightMsg);
 
         if (!leftOk || !rightOk)
         {
@@ -228,13 +224,17 @@ public class EyeRegionTracker : MonoBehaviour
         if (trackingStartTime < 0f)
             trackingStartTime = Time.unscaledTime;
 
-        LeftRaw = leftScore;
-        RightRaw = rightScore;
-        CombinedRaw = 0.5f * (LeftRaw + RightRaw);
+        UpdateCalibration();
 
-        UpdateCalibrationAndSignals();
+        if (!templateReady)
+        {
+            ResetBlinkPhaseOnly();
+            LastBlinkDecision = "Building open-eye template";
+            return;
+        }
+
+        UpdateDifferenceSignals();
         UpdateBlinkState();
-        UpdateOpenBaseline();
     }
 
     Rect AdjustEyeRect(Rect r)
@@ -251,84 +251,91 @@ public class EyeRegionTracker : MonoBehaviour
         return ClampRect01(adjusted);
     }
 
-    void UpdateCalibrationAndSignals()
+    void UpdateCalibration()
     {
         float trackedTime = Time.unscaledTime - trackingStartTime;
         IsCalibrating = trackedTime < calibrationDuration;
 
-        float leftCandidate = Mathf.Max(LeftRaw, minBaseline);
-        float rightCandidate = Mathf.Max(RightRaw, minBaseline);
-
-        if (LeftBaseline <= 0f)
-            LeftBaseline = leftCandidate;
-
-        if (RightBaseline <= 0f)
-            RightBaseline = rightCandidate;
-
-        if (IsCalibrating)
+        if (!IsCalibrating)
         {
-            float t = 1f - Mathf.Exp(-8f * sampleInterval);
-            LeftBaseline = Mathf.Lerp(LeftBaseline, leftCandidate, t);
-            RightBaseline = Mathf.Lerp(RightBaseline, rightCandidate, t);
+            if (calibrationSampleCount > 0)
+                templateReady = true;
+
+            return;
         }
 
-        ComputeSignals();
+        AddToTemplate(leftCurrent, leftTemplate, calibrationSampleCount);
+        AddToTemplate(rightCurrent, rightTemplate, calibrationSampleCount);
+
+        calibrationSampleCount++;
+        templateReady = false;
     }
 
-    void ComputeSignals()
+    void AddToTemplate(float[] current, float[] template, int sampleIndex)
     {
-        LeftBaseline = Mathf.Max(LeftBaseline, minBaseline);
-        RightBaseline = Mathf.Max(RightBaseline, minBaseline);
+        if (current == null || template == null || current.Length != template.Length)
+            return;
 
-        LeftNorm01 = Mathf.Clamp01(LeftRaw / LeftBaseline);
-        RightNorm01 = Mathf.Clamp01(RightRaw / RightBaseline);
-        Combined01 = 0.5f * (LeftNorm01 + RightNorm01);
+        if (sampleIndex <= 0)
+        {
+            for (int i = 0; i < current.Length; i++)
+                template[i] = current[i];
+
+            return;
+        }
+
+        float t = 1f / (sampleIndex + 1f);
+
+        for (int i = 0; i < current.Length; i++)
+            template[i] = Mathf.Lerp(template[i], current[i], t);
+    }
+
+    void UpdateDifferenceSignals()
+    {
+        LeftDifference01 = ComputeTemplateDifference(leftCurrent, leftTemplate);
+        RightDifference01 = ComputeTemplateDifference(rightCurrent, rightTemplate);
+        Difference01 = 0.5f * (LeftDifference01 + RightDifference01);
 
         float smoothT = 1f - Mathf.Exp(-smoothingSpeed * sampleInterval);
 
-        if (LeftSmooth01 <= 0f)
-            LeftSmooth01 = LeftNorm01;
-        else
-            LeftSmooth01 = Mathf.Lerp(LeftSmooth01, LeftNorm01, smoothT);
+        LeftSmoothDifference01 = Mathf.Lerp(LeftSmoothDifference01, LeftDifference01, smoothT);
+        RightSmoothDifference01 = Mathf.Lerp(RightSmoothDifference01, RightDifference01, smoothT);
+        SmoothDifference01 = 0.5f * (LeftSmoothDifference01 + RightSmoothDifference01);
+    }
 
-        if (RightSmooth01 <= 0f)
-            RightSmooth01 = RightNorm01;
-        else
-            RightSmooth01 = Mathf.Lerp(RightSmooth01, RightNorm01, smoothT);
+    float ComputeTemplateDifference(float[] current, float[] template)
+    {
+        if (current == null || template == null || current.Length != template.Length || current.Length == 0)
+            return 0f;
 
-        Smoothed01 = 0.5f * (LeftSmooth01 + RightSmooth01);
+        float sum = 0f;
 
-        StrongerEye01 = Mathf.Max(LeftSmooth01, RightSmooth01);
-        WeakerEye01 = Mathf.Min(LeftSmooth01, RightSmooth01);
-        ClosureDepth01 = 1f - Smoothed01;
-        LeftChange01 = 1f - LeftSmooth01;
-        RightChange01 = 1f - RightSmooth01;
+        for (int i = 0; i < current.Length; i++)
+            sum += Mathf.Abs(current[i] - template[i]);
+
+        return Mathf.Clamp01(sum / current.Length);
     }
 
     void UpdateBlinkState()
     {
         CandidateAge = 0f;
 
-        if (IsCalibrating)
+        if (IsCalibrating || !templateReady)
         {
             ResetBlinkPhaseOnly();
             LastBlinkDecision = "Calibrating - keep eyes open";
             return;
         }
 
-        bool leftClosed = LeftSmooth01 <= closedThreshold01;
-        bool rightClosed = RightSmooth01 <= closedThreshold01;
+        bool leftDifferent = LeftSmoothDifference01 >= closedDifferenceThreshold;
+        bool rightDifferent = RightSmoothDifference01 >= closedDifferenceThreshold;
 
-        bool closedNow = requireBothEyesClosed
-            ? leftClosed && rightClosed
-            : Smoothed01 <= closedThreshold01 && (leftClosed || rightClosed);
+        bool closedNow = leftDifferent && rightDifferent;
 
-        bool leftOpen = LeftSmooth01 >= reopenThreshold01;
-        bool rightOpen = RightSmooth01 >= reopenThreshold01;
+        bool leftBackOpen = LeftSmoothDifference01 <= reopenDifferenceThreshold;
+        bool rightBackOpen = RightSmoothDifference01 <= reopenDifferenceThreshold;
 
-        bool openNow = requireBothEyesClosed
-            ? leftOpen && rightOpen
-            : Smoothed01 >= reopenThreshold01;
+        bool openNow = leftBackOpen && rightBackOpen;
 
         if (openNow && !MotionSuppressed)
         {
@@ -353,7 +360,7 @@ public class EyeRegionTracker : MonoBehaviour
             case BlinkPhase.Idle:
                 {
                     EyesClosed = false;
-                    closedMinCombined01 = 1f;
+                    maxClosedDifference = 0f;
 
                     if (inCooldown)
                     {
@@ -364,7 +371,7 @@ public class EyeRegionTracker : MonoBehaviour
                     if (!BlinkArmed)
                     {
                         LastBlinkDecision =
-                            $"Waiting for open eyes | L:{LeftSmooth01:F2} R:{RightSmooth01:F2}";
+                            $"Waiting for open match | LDiff:{LeftSmoothDifference01:F2} RDiff:{RightSmoothDifference01:F2}";
                         return;
                     }
 
@@ -374,15 +381,15 @@ public class EyeRegionTracker : MonoBehaviour
                         EyesClosed = true;
                         BlinkArmed = false;
                         closedStartTime = Time.unscaledTime;
-                        closedMinCombined01 = Smoothed01;
+                        maxClosedDifference = SmoothDifference01;
 
                         LastBlinkDecision =
-                            $"Eyes closed | L:{LeftSmooth01:F2} R:{RightSmooth01:F2}";
+                            $"Eyes changed/closed | LDiff:{LeftSmoothDifference01:F2} RDiff:{RightSmoothDifference01:F2}";
                         return;
                     }
 
                     LastBlinkDecision =
-                        $"Watching | L:{LeftSmooth01:F2} R:{RightSmooth01:F2}";
+                        $"Watching | LDiff:{LeftSmoothDifference01:F2} RDiff:{RightSmoothDifference01:F2}";
                     return;
                 }
 
@@ -390,7 +397,7 @@ public class EyeRegionTracker : MonoBehaviour
                 {
                     EyesClosed = true;
                     CandidateAge = Time.unscaledTime - closedStartTime;
-                    closedMinCombined01 = Mathf.Min(closedMinCombined01, Smoothed01);
+                    maxClosedDifference = Mathf.Max(maxClosedDifference, SmoothDifference01);
 
                     if (openNow)
                     {
@@ -427,50 +434,15 @@ public class EyeRegionTracker : MonoBehaviour
 
                     if (CandidateAge > maxBlinkClosedTime)
                     {
-                        LastBlinkDecision = "Rejected: eyes held closed too long";
+                        LastBlinkDecision = "Rejected: eyes held changed/closed too long";
                         ResetBlinkPhaseOnly();
                         return;
                     }
 
-                    LastBlinkDecision =
-                        $"Closed holding | {CandidateAge:F2}s";
+                    LastBlinkDecision = $"Closed holding | {CandidateAge:F2}s";
                     return;
                 }
         }
-    }
-
-    void UpdateOpenBaseline()
-    {
-        if (IsCalibrating || MotionSuppressed || phase != BlinkPhase.Idle || EyesClosed)
-            return;
-
-        bool confidentlyOpen =
-            BlinkArmed &&
-            LeftSmooth01 >= reopenThreshold01 &&
-            RightSmooth01 >= reopenThreshold01;
-
-        if (!confidentlyOpen)
-            return;
-
-        float riseT = 1f - Mathf.Exp(-baselineRiseSpeed * sampleInterval);
-        float fallT = 1f - Mathf.Exp(-baselineFallSpeed * sampleInterval);
-
-        float leftTarget = Mathf.Max(LeftRaw, minBaseline);
-        float rightTarget = Mathf.Max(RightRaw, minBaseline);
-
-        LeftBaseline = Mathf.Lerp(
-            LeftBaseline,
-            leftTarget,
-            LeftRaw > LeftBaseline ? riseT : fallT
-        );
-
-        RightBaseline = Mathf.Lerp(
-            RightBaseline,
-            rightTarget,
-            RightRaw > RightBaseline ? riseT : fallT
-        );
-
-        ComputeSignals();
     }
 
     void ResetBlinkPhaseOnly()
@@ -478,7 +450,7 @@ public class EyeRegionTracker : MonoBehaviour
         EyesClosed = false;
         phase = BlinkPhase.Idle;
         CandidateAge = 0f;
-        closedMinCombined01 = 1f;
+        maxClosedDifference = 0f;
         openStableStartTime = -1f;
         OpenStableAge = 0f;
         BlinkArmed = false;
@@ -559,9 +531,8 @@ public class EyeRegionTracker : MonoBehaviour
         return MotionSuppressed;
     }
 
-    bool SampleEye(RenderTexture src, Rect eyeRect01TopLeft, RenderTexture dst, Texture2D dstTex, out float score, out string message)
+    bool SampleEye(RenderTexture src, Rect eyeRect01TopLeft, RenderTexture dst, Texture2D dstTex, float[] outputSignature, out string message)
     {
-        score = 0f;
         message = "Unknown";
 
         if (src == null)
@@ -579,6 +550,12 @@ public class EyeRegionTracker : MonoBehaviour
         if (dstTex == null)
         {
             message = "dstTex null";
+            return false;
+        }
+
+        if (outputSignature == null || outputSignature.Length != sampleWidth * sampleHeight)
+        {
+            message = "signature buffer invalid";
             return false;
         }
 
@@ -611,135 +588,44 @@ public class EyeRegionTracker : MonoBehaviour
             return false;
         }
 
-        score = ComputeEyeOpennessScore(pixels, dst.width, dst.height);
-        message = $"ok ({score:F4})";
+        BuildLightingNormalisedSignature(pixels, dst.width, dst.height, outputSignature);
+        message = "ok";
         return true;
     }
 
-    float ComputeEyeOpennessScore(Color32[] pixels, int width, int height)
+    void BuildLightingNormalisedSignature(Color32[] pixels, int width, int height, float[] output)
     {
-        if (pixels == null || pixels.Length < width * height || width < 4 || height < 4)
-            return 0f;
+        if (pixels == null || output == null || pixels.Length < width * height || output.Length < width * height)
+            return;
 
-        // Ignore the very edges of the sample box.
-        int x0 = Mathf.Clamp(Mathf.RoundToInt(width * 0.10f), 0, width - 1);
-        int x1 = Mathf.Clamp(Mathf.RoundToInt(width * 0.90f), x0 + 1, width);
-
-        int y0 = Mathf.Clamp(Mathf.RoundToInt(height * 0.12f), 0, height - 1);
-        int y1 = Mathf.Clamp(Mathf.RoundToInt(height * 0.88f), y0 + 1, height);
-
-        int roiW = x1 - x0;
-        int roiH = y1 - y0;
-
-        if (roiW <= 0 || roiH <= 0)
-            return 0f;
-
-        // First pass: calculate the local average brightness.
-        // This makes the detector care less about the room being bright/dark.
         float sum = 0f;
-        int count = 0;
+        int count = width * height;
 
-        for (int y = y0; y < y1; y++)
-        {
-            int row = y * width;
+        for (int i = 0; i < count; i++)
+            sum += Luma(pixels[i]);
 
-            for (int x = x0; x < x1; x++)
-            {
-                sum += Luma(pixels[row + x]);
-                count++;
-            }
-        }
+        float mean = sum / Mathf.Max(1, count);
 
-        if (count <= 0)
-            return 0f;
-
-        float mean = sum / count;
-
-        // Second pass: calculate local contrast.
         float varianceSum = 0f;
 
-        for (int y = y0; y < y1; y++)
+        for (int i = 0; i < count; i++)
         {
-            int row = y * width;
-
-            for (int x = x0; x < x1; x++)
-            {
-                float d = Luma(pixels[row + x]) - mean;
-                varianceSum += d * d;
-            }
+            float d = Luma(pixels[i]) - mean;
+            varianceSum += d * d;
         }
 
-        float std = Mathf.Sqrt(varianceSum / count);
+        float std = Mathf.Sqrt(varianceSum / Mathf.Max(1, count));
+        std = Mathf.Max(std, 8f);
 
-        // If the image has almost no contrast, we cannot confidently read the eye.
-        // Return a middle-ish value instead of pretending it is fully open or closed.
-        if (std < 3f)
-            return 0.5f;
-
-        float[] rowDarkEnergy = new float[height];
-
-        // Third pass: find pixels that are dark relative to the local eye crop.
-        // This is the important change: it uses relative darkness, not absolute light level.
-        for (int y = y0; y < y1; y++)
+        for (int i = 0; i < count; i++)
         {
-            float rowEnergy = 0f;
-            int row = y * width;
+            float l = Luma(pixels[i]);
 
-            for (int x = x0; x < x1; x++)
-            {
-                float l = Luma(pixels[row + x]);
-
-                // Positive when this pixel is darker than the local average.
-                float darkAmount = Mathf.Clamp01((mean - l) / (std * 1.25f));
-
-                rowEnergy += darkAmount;
-            }
-
-            rowDarkEnergy[y] = rowEnergy / roiW;
+            // Local contrast normalisation.
+            // 0.5 = local average, lower = darker than local average, higher = brighter.
+            float normalised = 0.5f + ((l - mean) / (std * 4f));
+            output[i] = Mathf.Clamp01(normalised);
         }
-
-        // Find the strongest dark row. In an open eye this should come from iris/pupil.
-        float maxRowEnergy = 0f;
-
-        for (int y = y0; y < y1; y++)
-            maxRowEnergy = Mathf.Max(maxRowEnergy, rowDarkEnergy[y]);
-
-        if (maxRowEnergy <= 0.02f)
-            return 0.5f;
-
-        // Measure how many vertical rows contain meaningful dark eye detail.
-        // Open eye: iris/pupil creates a taller vertical dark region.
-        // Closed eye: eyelid/eyelash line is usually much flatter/thinner.
-        float threshold = maxRowEnergy * 0.38f;
-
-        int firstActiveRow = -1;
-        int lastActiveRow = -1;
-
-        for (int y = y0; y < y1; y++)
-        {
-            if (rowDarkEnergy[y] >= threshold)
-            {
-                if (firstActiveRow < 0)
-                    firstActiveRow = y;
-
-                lastActiveRow = y;
-            }
-        }
-
-        if (firstActiveRow < 0 || lastActiveRow < 0)
-            return 0.5f;
-
-        float activeHeight = lastActiveRow - firstActiveRow + 1;
-
-        // Convert vertical dark feature height into a 0-1 openness score.
-        float openness = activeHeight / Mathf.Max(1f, roiH * 0.55f);
-
-        // Add a small confidence factor so noisy/flat crops do not jump around too much.
-        float contrastConfidence = Mathf.Clamp01(std / 18f);
-
-        openness = Mathf.Lerp(0.5f, openness, contrastConfidence);
-
-        return Mathf.Clamp01(openness);
     }
 
     float Luma(Color32 c)
@@ -778,6 +664,10 @@ public class EyeRegionTracker : MonoBehaviour
             rightEyeRT == null ||
             leftEyeTex == null ||
             rightEyeTex == null ||
+            leftTemplate == null ||
+            rightTemplate == null ||
+            leftCurrent == null ||
+            rightCurrent == null ||
             leftEyeRT.width != sampleWidth ||
             leftEyeRT.height != sampleHeight ||
             rightEyeRT.width != sampleWidth ||
@@ -800,30 +690,40 @@ public class EyeRegionTracker : MonoBehaviour
 
         leftEyeTex = new Texture2D(sampleWidth, sampleHeight, TextureFormat.RGBA32, false, false);
         rightEyeTex = new Texture2D(sampleWidth, sampleHeight, TextureFormat.RGBA32, false, false);
+
+        int len = sampleWidth * sampleHeight;
+        leftTemplate = new float[len];
+        rightTemplate = new float[len];
+        leftCurrent = new float[len];
+        rightCurrent = new float[len];
     }
 
     void InvalidateTracking(bool clearBlinkCount)
     {
-        LeftRaw = 0f;
-        RightRaw = 0f;
-        CombinedRaw = 0f;
+        CreateBuffers();
 
-        LeftBaseline = 0f;
-        RightBaseline = 0f;
+        if (leftTemplate != null)
+            System.Array.Clear(leftTemplate, 0, leftTemplate.Length);
 
-        LeftNorm01 = 0f;
-        RightNorm01 = 0f;
-        Combined01 = 0f;
+        if (rightTemplate != null)
+            System.Array.Clear(rightTemplate, 0, rightTemplate.Length);
 
-        LeftSmooth01 = 0f;
-        RightSmooth01 = 0f;
-        Smoothed01 = 0f;
+        if (leftCurrent != null)
+            System.Array.Clear(leftCurrent, 0, leftCurrent.Length);
 
-        StrongerEye01 = 0f;
-        WeakerEye01 = 0f;
-        ClosureDepth01 = 0f;
-        LeftChange01 = 0f;
-        RightChange01 = 0f;
+        if (rightCurrent != null)
+            System.Array.Clear(rightCurrent, 0, rightCurrent.Length);
+
+        templateReady = false;
+        calibrationSampleCount = 0;
+
+        LeftDifference01 = 0f;
+        RightDifference01 = 0f;
+        Difference01 = 0f;
+
+        LeftSmoothDifference01 = 0f;
+        RightSmoothDifference01 = 0f;
+        SmoothDifference01 = 0f;
 
         EyesClosed = false;
         BlinkThisFrame = false;
@@ -837,20 +737,13 @@ public class EyeRegionTracker : MonoBehaviour
         BlinkArmed = false;
         CandidateAge = 0f;
 
-        BaselineRecenterActive = false;
-        TemplateReady = false;
-        TemplateRecenterActive = false;
-        TemplateDiff01 = 0f;
-        LeftTemplateDiff01 = 0f;
-        RightTemplateDiff01 = 0f;
-
         phase = BlinkPhase.Idle;
 
         trackingStartTime = -1f;
         lastGoodSampleTime = -999f;
         lastBlinkTime = -999f;
         closedStartTime = 0f;
-        closedMinCombined01 = 1f;
+        maxClosedDifference = 0f;
         openStableStartTime = -1f;
         suppressBlinkUntil = -999f;
         havePrevEyeRects = false;
@@ -876,15 +769,13 @@ public class EyeRegionTracker : MonoBehaviour
 
         EnsureDebugStyle();
 
-        // Positioned under the eye/blink counter area instead of at the bottom.
-        // On a tall portrait phone screen this should sit around the upper-left/middle area.
         float x = 10f;
         float y = Screen.height * 0.22f;
 
         string text =
             $"EyeTracker | {LastSampleStatus} | Phase:{BlinkPhaseName}\n" +
-            $"Open L:{LeftSmooth01:F2} R:{RightSmooth01:F2} Avg:{Smoothed01:F2} | Closed:{EyesClosed} Armed:{BlinkArmed}\n" +
-            $"BlinkCount:{BlinkCount} | MotionIgnored:{MotionSuppressed} | Calibrating:{IsCalibrating}\n" +
+            $"Diff L:{LeftSmoothDifference01:F2} R:{RightSmoothDifference01:F2} Avg:{SmoothDifference01:F2} | Closed:{EyesClosed} Armed:{BlinkArmed}\n" +
+            $"BlinkCount:{BlinkCount} | MotionIgnored:{MotionSuppressed} | Calibrating:{IsCalibrating} | Template:{TemplateReady}\n" +
             $"Decision: {LastBlinkDecision}";
 
         GUI.Label(new Rect(x, y, Screen.width - 20, 180), text, debugTextStyle);
@@ -893,9 +784,7 @@ public class EyeRegionTracker : MonoBehaviour
         {
             float w = sampleWidth * 8f;
             float h = sampleHeight * 8f;
-
-            // Put the eye sample boxes directly below the debug text.
-            float previewY = y + 160f;
+            float previewY = y + 170f;
 
             if (leftEyeTex != null)
                 GUI.DrawTexture(new Rect(x, previewY, w, h), leftEyeTex, ScaleMode.StretchToFill, false);
@@ -937,5 +826,10 @@ public class EyeRegionTracker : MonoBehaviour
             Destroy(rightEyeTex);
             rightEyeTex = null;
         }
+
+        leftTemplate = null;
+        rightTemplate = null;
+        leftCurrent = null;
+        rightCurrent = null;
     }
 }

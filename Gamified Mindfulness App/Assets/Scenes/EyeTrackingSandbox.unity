@@ -310,22 +310,18 @@ MonoBehaviour:
   eyeRectWidthMultiplier: 1.14
   eyeRectHeightMultiplier: 0.48
   eyeRectYOffset: -0.02
-  calibrationDuration: 1
-  closedThreshold01: 0.83
-  reopenThreshold01: 0.87
-  smoothingSpeed: 13.9
-  minBlinkClosedTime: 0.03
-  maxBlinkClosedTime: 0.25
-  blinkCooldown: 0.15
-  minOpenStableTime: 0.075
-  requireBothEyesClosed: 1
-  minBaseline: 0.005
-  baselineRiseSpeed: 10
-  baselineFallSpeed: 1
+  calibrationDuration: 2
+  closedDifferenceThreshold: 0.16
+  reopenDifferenceThreshold: 0.14
+  smoothingSpeed: 18
+  minBlinkClosedTime: 0.04
+  maxBlinkClosedTime: 0.45
+  blinkCooldown: 0.05
+  minOpenStableTime: 0.02
   useMotionGuard: 1
-  rectMoveRejectFrac: 0.25
+  rectMoveRejectFrac: 0.2
   rectSizeRejectFrac: 0.25
-  motionSuppressTime: 0.12
+  motionSuppressTime: 0.16
   showDebugOverlay: 1
   showEyeSamplePreview: 1
   logBlinkEvents: 0
@@ -1161,8 +1157,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RabbitEncounterController
   eyeTracker: {fileID: 383490684}
-  passSeconds: 30
-  allowedBlinks: 5
+  passSeconds: 20
+  allowedBlinks: 3
   startupCalibrationSeconds: 3
   resetTimerOnBlink: 1
   startAutomatically: 1
@@ -1216,7 +1212,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: -0.000019073, y: -116}
+  m_AnchoredPosition: {x: -0.000019073, y: -1187}
   m_SizeDelta: {x: 257.3203, y: 83.3691}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1034126935
@@ -1652,7 +1648,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: -0.000019073, y: -116}
+  m_AnchoredPosition: {x: -0.000019073, y: -1187}
   m_SizeDelta: {x: 257.3203, y: 83.3691}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1605817705

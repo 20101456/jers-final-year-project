@@ -46,7 +46,6 @@ public class RabbitEncounterController : MonoBehaviour
 
     [Header("HUD")]
     public Image countdownFill;
-    public TMP_Text countdownText;
     public TMP_Text blinkCounterText;
 
     [Header("Panels")]
@@ -56,11 +55,6 @@ public class RabbitEncounterController : MonoBehaviour
     public GameObject passPanel;
     public GameObject failPanel;
     public TMP_Text resultText;
-
-    [Header("Editor / Development Testing")]
-    public bool allowKeyboardTesting = true;
-    public KeyCode testBlinkKey = KeyCode.Space;
-    public KeyCode restartKey = KeyCode.R;
 
     public EncounterState State { get; private set; } = EncounterState.NotStarted;
     public float NoBlinkTimer { get; private set; }
@@ -85,23 +79,11 @@ public class RabbitEncounterController : MonoBehaviour
 
     void Update()
     {
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
-        if (allowKeyboardTesting && Input.GetKeyDown(restartKey))
-        {
-            BeginEncounter();
-            return;
-        }
-#endif
 
         if (State != EncounterState.Running)
             return;
 
         bool blinkNow = eyeTracker != null && eyeTracker.BlinkThisFrame;
-
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
-        if (allowKeyboardTesting && Input.GetKeyDown(testBlinkKey))
-            blinkNow = true;
-#endif
 
         if (blinkNow)
         {
@@ -292,11 +274,6 @@ public class RabbitEncounterController : MonoBehaviour
         if (countdownFill != null)
             countdownFill.fillAmount = countdown01;
 
-        if (countdownText != null)
-        {
-            float remaining = Mathf.Max(0f, passSeconds - NoBlinkTimer);
-            countdownText.text = Mathf.CeilToInt(remaining).ToString();
-        }
 
         if (blinkCounterText != null)
             blinkCounterText.text = "x" + BlinksRemaining.ToString();

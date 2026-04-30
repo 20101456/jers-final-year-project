@@ -21,9 +21,6 @@ public class CameraFrameCorrector : MonoBehaviour
     [Tooltip("0 = none, 1 = +90, 2 = +180, 3 = +270")]
     [Range(0, 3)] public int rotationOffset90 = 0;
 
-    [Tooltip("Toggle this if the preview is still upside down even when rotation looks correct.")]
-    public bool invertReportedVerticalMirror = false;
-
     [Header("Debug")]
     public bool logCameraMeta = true;
 
@@ -129,8 +126,6 @@ public class CameraFrameCorrector : MonoBehaviour
         int flipX = (isFront && mirrorFrontCamera) ? 1 : 0;
         int flipY = CamTex.videoVerticallyMirrored ? 1 : 0;
 
-        if (invertReportedVerticalMirror)
-            flipY ^= 1;
 
         blitMat.SetFloat(Rot90ID, rot);
         blitMat.SetFloat(FlipXID, flipX);

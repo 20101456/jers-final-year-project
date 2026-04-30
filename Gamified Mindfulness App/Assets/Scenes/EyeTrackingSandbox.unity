@@ -261,7 +261,6 @@ MonoBehaviour:
   requestFPS: 30
   mirrorFrontCamera: 1
   rotationOffset90: 2
-  invertReportedVerticalMirror: 0
   logCameraMeta: 0
 --- !u!114 &383490682
 MonoBehaviour:
@@ -344,11 +343,11 @@ MonoBehaviour:
   rectMoveRejectFrac: 0.2
   rectSizeRejectFrac: 0.18
   motionSuppressTime: 0.12
-  showDebugOverlay: 0
-  showEyeSamplePreview: 0
+  showDebugOverlay: 1
+  showEyeSamplePreview: 1
   logBlinkEvents: 1
   logSampleFailures: 1
-  debugFontSize: 28
+  debugFontSize: 32
 --- !u!1 &469995582
 GameObject:
   m_ObjectHideFlags: 0
@@ -1179,7 +1178,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RabbitEncounterController
   eyeTracker: {fileID: 383490684}
-  passSeconds: 10
+  passSeconds: 20
   allowedBlinks: 20
   startupCalibrationSeconds: 3
   resetTimerOnBlink: 1
@@ -1192,16 +1191,12 @@ MonoBehaviour:
   whiteRabbitSprite: {fileID: 21300000, guid: 9ad1f23642ff9544f9bc77950d840b8e, type: 3}
   transformFadeSeconds: 0.75
   countdownFill: {fileID: 1768918382}
-  countdownText: {fileID: 0}
   blinkCounterText: {fileID: 736409667}
   calibrationPanel: {fileID: 768293142}
   calibrationText: {fileID: 469995585}
   passPanel: {fileID: 791962570}
   failPanel: {fileID: 202375848}
   resultText: {fileID: 0}
-  allowKeyboardTesting: 1
-  testBlinkKey: 32
-  restartKey: 114
 --- !u!1 &1238313146
 GameObject:
   m_ObjectHideFlags: 0

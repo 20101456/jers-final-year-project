@@ -66,6 +66,7 @@ public class RabbitEncounterController : MonoBehaviour
     }
 
     Coroutine activeRoutine;
+    int lastSeenTrackerBlinkCount;
 
     void Start()
     {
@@ -83,7 +84,7 @@ public class RabbitEncounterController : MonoBehaviour
         if (State != EncounterState.Running)
             return;
 
-        bool blinkNow = eyeTracker != null && eyeTracker.BlinkThisFrame;
+        bool blinkNow = HasNewTrackerBlink();
 
         if (blinkNow)
         {
@@ -113,6 +114,7 @@ public class RabbitEncounterController : MonoBehaviour
 
         ResetVisualsToStart();
         TryRecalibrateEyeTracker();
+        SyncBlinkCounterFromTracker();
         UpdateHUD();
 
         activeRoutine = StartCoroutine(StartAfterCalibrationRoutine());
@@ -131,9 +133,37 @@ public class RabbitEncounterController : MonoBehaviour
         if (calibrationPanel != null)
             calibrationPanel.SetActive(false);
 
+        SyncBlinkCounterFromTracker();
         State = EncounterState.Running;
         NoBlinkTimer = 0f;
         UpdateHUD();
+    }
+
+    void SyncBlinkCounterFromTracker()
+    {
+        lastSeenTrackerBlinkCount = eyeTracker != null ? eyeTracker.BlinkCount : 0;
+    }
+
+    bool HasNewTrackerBlink()
+    {
+        if (eyeTracker == null)
+            return false;
+
+        int currentBlinkCount = eyeTracker.BlinkCount;
+
+        if (currentBlinkCount < lastSeenTrackerBlinkCount)
+        {
+            lastSeenTrackerBlinkCount = currentBlinkCount;
+            return false;
+        }
+
+        if (currentBlinkCount > lastSeenTrackerBlinkCount)
+        {
+            lastSeenTrackerBlinkCount = currentBlinkCount;
+            return true;
+        }
+
+        return false;
     }
 
     void RegisterBlink()

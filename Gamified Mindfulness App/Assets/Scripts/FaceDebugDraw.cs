@@ -470,4 +470,5 @@ public class FaceDebugDraw : MonoBehaviour
         whiteTex.SetPixel(0, 0, Color.white);
         whiteTex.Apply();
     }
+
 }

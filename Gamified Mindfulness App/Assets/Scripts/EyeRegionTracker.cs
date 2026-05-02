@@ -73,7 +73,7 @@ public class EyeRegionTracker : MonoBehaviour
     public float RightSmoothDifference01 { get; private set; }
     public float SmoothDifference01 { get; private set; }
 
-    // Compatibility values for your existing encounter/debug scripts.
+    // Compatibility values for existing encounter/debug scripts.
     public float LeftRaw => 1f - LeftSmoothDifference01;
     public float RightRaw => 1f - RightSmoothDifference01;
     public float CombinedRaw => 1f - SmoothDifference01;
@@ -461,6 +461,18 @@ public class EyeRegionTracker : MonoBehaviour
         InvalidateTracking(clearBlinkCount);
         nextSampleTime = 0f;
         LastBlinkDecision = "Recalibrating - keep eyes open";
+    }
+
+    public void ToggleDebugUI()
+    {
+        showDebugOverlay = !showDebugOverlay;
+        showEyeSamplePreview = showDebugOverlay;
+    }
+
+    public void SetDebugUI(bool visible)
+    {
+        showDebugOverlay = visible;
+        showEyeSamplePreview = visible;
     }
 
     void HandleTrackingLoss(string status)

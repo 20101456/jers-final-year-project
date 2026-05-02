@@ -3,6 +3,13 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
+/// <summary>
+/// Controls the rabbit mindfulness encounter.
+///
+/// The player must keep their eyes open for a set amount of time.
+/// Blinks are read from EyeRegionTracker. Each blink can reset the focus timer,
+/// and using more than the allowed number of blinks fails the encounter.
+/// </summary>
 public class RabbitEncounterController : MonoBehaviour
 {
     public enum EncounterState
@@ -21,13 +28,13 @@ public class RabbitEncounterController : MonoBehaviour
     [Tooltip("How long the player must avoid blinking to pass.")]
     public float passSeconds = 10f;
 
-    [Tooltip("Number of blinks allowed before the encounter fails. More than this fails.")]
+    [Tooltip("Number of blinks allowed. The next blink after this fails the encounter.")]
     public int allowedBlinks = 3;
 
     [Tooltip("How long to show the keep-eyes-open calibration message at the start.")]
     public float startupCalibrationSeconds = 1.0f;
 
-    [Tooltip("A blink resets the 10 second focus timer.")]
+    [Tooltip("If enabled, each blink resets the focus timer.")]
     public bool resetTimerOnBlink = true;
 
     public bool startAutomatically = true;
@@ -60,13 +67,18 @@ public class RabbitEncounterController : MonoBehaviour
     public float NoBlinkTimer { get; private set; }
     public int BlinksUsed { get; private set; }
 
-    public int BlinksRemaining
-    {
-        get { return Mathf.Max(0, allowedBlinks - BlinksUsed); }
-    }
+    public int BlinksRemaining => Mathf.Max(0, allowedBlinks - BlinksUsed);
 
-    Coroutine activeRoutine;
+    Coroutine calibrationRoutine;
+    Coroutine transformRoutine;
+
     int lastSeenTrackerBlinkCount;
+
+    void Awake()
+    {
+        if (eyeTracker == null)
+            eyeTracker = FindFirstObjectByType<EyeRegionTracker>();
+    }
 
     void Start()
     {
@@ -80,13 +92,10 @@ public class RabbitEncounterController : MonoBehaviour
 
     void Update()
     {
-
         if (State != EncounterState.Running)
             return;
 
-        bool blinkNow = HasNewTrackerBlink();
-
-        if (blinkNow)
+        if (HasNewTrackerBlink())
         {
             RegisterBlink();
             UpdateHUD();
@@ -106,7 +115,7 @@ public class RabbitEncounterController : MonoBehaviour
 
     public void BeginEncounter()
     {
-        StopAllCoroutines();
+        StopActiveRoutines();
 
         State = EncounterState.Calibrating;
         NoBlinkTimer = 0f;
@@ -117,31 +126,133 @@ public class RabbitEncounterController : MonoBehaviour
         SyncBlinkCounterFromTracker();
         UpdateHUD();
 
-        activeRoutine = StartCoroutine(StartAfterCalibrationRoutine());
+        calibrationRoutine = StartCoroutine(StartAfterCalibrationRoutine());
     }
 
     IEnumerator StartAfterCalibrationRoutine()
     {
-        if (calibrationPanel != null)
-            calibrationPanel.SetActive(true);
+        SetPanel(calibrationPanel, true);
+        SetPanel(passPanel, false);
+        SetPanel(failPanel, false);
 
         if (calibrationText != null)
             calibrationText.text = "Keep your eyes open...";
 
         yield return new WaitForSecondsRealtime(startupCalibrationSeconds);
 
-        if (calibrationPanel != null)
-            calibrationPanel.SetActive(false);
+        SetPanel(calibrationPanel, false);
 
         SyncBlinkCounterFromTracker();
+
         State = EncounterState.Running;
         NoBlinkTimer = 0f;
+
         UpdateHUD();
+
+        calibrationRoutine = null;
     }
 
-    void SyncBlinkCounterFromTracker()
+    void RegisterBlink()
     {
-        lastSeenTrackerBlinkCount = eyeTracker != null ? eyeTracker.BlinkCount : 0;
+        if (State != EncounterState.Running)
+            return;
+
+        BlinksUsed++;
+
+        if (resetTimerOnBlink)
+            NoBlinkTimer = 0f;
+
+        // Example: if allowedBlinks is 3, the 4th blink fails the encounter.
+        if (BlinksUsed > allowedBlinks)
+            FailEncounter();
+    }
+
+    void PassEncounter()
+    {
+        if (State == EncounterState.Passed)
+            return;
+
+        State = EncounterState.Passed;
+        NoBlinkTimer = passSeconds;
+
+        SetPanel(calibrationPanel, false);
+        SetPanel(failPanel, false);
+        SetPanel(passPanel, true);
+
+        if (resultText != null)
+            resultText.text = "ENCOUNTER PASSED!";
+
+        UpdateHUD();
+
+        StopCalibrationRoutine();
+
+        if (transformRoutine != null)
+            StopCoroutine(transformRoutine);
+
+        transformRoutine = StartCoroutine(TransformRabbitRoutine());
+    }
+
+    void FailEncounter()
+    {
+        if (State == EncounterState.Failed)
+            return;
+
+        State = EncounterState.Failed;
+
+        SetPanel(calibrationPanel, false);
+        SetPanel(passPanel, false);
+        SetPanel(failPanel, true);
+
+        if (resultText != null)
+            resultText.text = "ENCOUNTER FAILED";
+
+        UpdateHUD();
+
+        StopActiveRoutines();
+    }
+
+    IEnumerator TransformRabbitRoutine()
+    {
+        if (rabbitImage == null || whiteRabbitSprite == null)
+        {
+            transformRoutine = null;
+            yield break;
+        }
+
+        float halfTime = Mathf.Max(0.01f, transformFadeSeconds * 0.5f);
+
+        yield return FadeImageAlpha(rabbitImage, 1f, 0f, halfTime);
+
+        rabbitImage.sprite = whiteRabbitSprite;
+
+        if (backgroundImage != null && passedBackgroundSprite != null)
+            backgroundImage.sprite = passedBackgroundSprite;
+
+        yield return FadeImageAlpha(rabbitImage, 0f, 1f, halfTime);
+
+        transformRoutine = null;
+    }
+
+    IEnumerator FadeImageAlpha(Image image, float from, float to, float duration)
+    {
+        if (image == null)
+            yield break;
+
+        float elapsed = 0f;
+
+        while (elapsed < duration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+
+            float t = Mathf.Clamp01(elapsed / duration);
+            float alpha = Mathf.Lerp(from, to, t);
+
+            SetImageAlpha(image, alpha);
+
+            yield return null;
+        }
+
+        SetImageAlpha(image, to);
     }
 
     bool HasNewTrackerBlink()
@@ -151,6 +262,7 @@ public class RabbitEncounterController : MonoBehaviour
 
         int currentBlinkCount = eyeTracker.BlinkCount;
 
+        // The tracker may have recalibrated and reset its own counter.
         if (currentBlinkCount < lastSeenTrackerBlinkCount)
         {
             lastSeenTrackerBlinkCount = currentBlinkCount;
@@ -166,106 +278,15 @@ public class RabbitEncounterController : MonoBehaviour
         return false;
     }
 
-    void RegisterBlink()
+    void SyncBlinkCounterFromTracker()
     {
-        if (State != EncounterState.Running)
-            return;
-
-        BlinksUsed++;
-
-        if (resetTimerOnBlink)
-            NoBlinkTimer = 0f;
-
-        // x3 means 3 blinks are allowed.
-        // The 4th blink fails the encounter.
-        if (BlinksUsed > allowedBlinks)
-        {
-            FailEncounter();
-            return;
-        }
+        lastSeenTrackerBlinkCount = eyeTracker != null ? eyeTracker.BlinkCount : 0;
     }
 
-    void PassEncounter()
+    void TryRecalibrateEyeTracker()
     {
-        if (State == EncounterState.Passed)
-            return;
-
-        State = EncounterState.Passed;
-        NoBlinkTimer = passSeconds;
-
-        if (calibrationPanel != null)
-            calibrationPanel.SetActive(false);
-
-        if (failPanel != null)
-            failPanel.SetActive(false);
-
-        if (passPanel != null)
-            passPanel.SetActive(true);
-
-        if (resultText != null)
-            resultText.text = "ENCOUNTER PASSED!";
-
-        UpdateHUD();
-
-        StopAllCoroutines();
-        activeRoutine = StartCoroutine(TransformRabbitRoutine());
-    }
-
-    void FailEncounter()
-    {
-        if (State == EncounterState.Failed)
-            return;
-
-        State = EncounterState.Failed;
-
-        if (calibrationPanel != null)
-            calibrationPanel.SetActive(false);
-
-        if (passPanel != null)
-            passPanel.SetActive(false);
-
-        if (failPanel != null)
-            failPanel.SetActive(true);
-
-        if (resultText != null)
-            resultText.text = "ENCOUNTER FAILED";
-
-        UpdateHUD();
-    }
-
-    IEnumerator TransformRabbitRoutine()
-    {
-        if (rabbitImage == null || whiteRabbitSprite == null)
-            yield break;
-
-        float halfTime = Mathf.Max(0.01f, transformFadeSeconds * 0.5f);
-
-        yield return FadeImageAlpha(rabbitImage, 1f, 0f, halfTime);
-
-        rabbitImage.sprite = whiteRabbitSprite;
-
-        if (backgroundImage != null && passedBackgroundSprite != null)
-            backgroundImage.sprite = passedBackgroundSprite;
-
-        yield return FadeImageAlpha(rabbitImage, 0f, 1f, halfTime);
-    }
-
-    IEnumerator FadeImageAlpha(Image img, float from, float to, float duration)
-    {
-        if (img == null)
-            yield break;
-
-        float t = 0f;
-
-        while (t < duration)
-        {
-            t += Time.unscaledDeltaTime;
-            float a = Mathf.Lerp(from, to, t / duration);
-            SetImageAlpha(img, a);
-            yield return null;
-        }
-
-        SetImageAlpha(img, to);
+        if (eyeTracker != null)
+            eyeTracker.Recalibrate(true);
     }
 
     void ResetVisualsToStart()
@@ -279,14 +300,9 @@ public class RabbitEncounterController : MonoBehaviour
             SetImageAlpha(rabbitImage, 1f);
         }
 
-        if (passPanel != null)
-            passPanel.SetActive(false);
-
-        if (failPanel != null)
-            failPanel.SetActive(false);
-
-        if (calibrationPanel != null)
-            calibrationPanel.SetActive(false);
+        SetPanel(passPanel, false);
+        SetPanel(failPanel, false);
+        SetPanel(calibrationPanel, false);
 
         if (resultText != null)
             resultText.text = "";
@@ -298,15 +314,14 @@ public class RabbitEncounterController : MonoBehaviour
             ? Mathf.Clamp01(NoBlinkTimer / passSeconds)
             : 1f;
 
-        // Countdown bar empties from full to empty.
+        // Countdown bar starts full and empties as the player maintains focus.
         float countdown01 = 1f - progress01;
 
         if (countdownFill != null)
             countdownFill.fillAmount = countdown01;
 
-
         if (blinkCounterText != null)
-            blinkCounterText.text = "x" + BlinksRemaining.ToString();
+            blinkCounterText.text = "x" + BlinksRemaining;
     }
 
     void PrepareCountdownImage()
@@ -320,27 +335,39 @@ public class RabbitEncounterController : MonoBehaviour
         countdownFill.fillAmount = 1f;
     }
 
-    void SetImageAlpha(Image img, float alpha)
+    void SetImageAlpha(Image image, float alpha)
     {
-        if (img == null)
+        if (image == null)
             return;
 
-        Color c = img.color;
-        c.a = alpha;
-        img.color = c;
+        Color colour = image.color;
+        colour.a = alpha;
+        image.color = colour;
     }
 
-    void TryRecalibrateEyeTracker()
+    void SetPanel(GameObject panel, bool visible)
     {
-        if (eyeTracker == null)
-            return;
+        if (panel != null)
+            panel.SetActive(visible);
+    }
 
-        // This works once you add Recalibrate(bool) to EyeRegionTracker.
-        // It also avoids compile errors if the method is not there yet.
-        eyeTracker.gameObject.SendMessage(
-            "Recalibrate",
-            true,
-            SendMessageOptions.DontRequireReceiver
-        );
+    void StopActiveRoutines()
+    {
+        StopCalibrationRoutine();
+
+        if (transformRoutine != null)
+        {
+            StopCoroutine(transformRoutine);
+            transformRoutine = null;
+        }
+    }
+
+    void StopCalibrationRoutine()
+    {
+        if (calibrationRoutine != null)
+        {
+            StopCoroutine(calibrationRoutine);
+            calibrationRoutine = null;
+        }
     }
 }

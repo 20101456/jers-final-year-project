@@ -1,7 +1,17 @@
 using UnityEngine;
 
+/// <summary>
+/// Tracks eye-region appearance changes from the corrected front-camera feed
+/// and uses those changes to estimate blinks.
+///
+/// The tracker builds an open-eye template during calibration, then compares
+/// each new eye sample against that template. A blink is counted when both eyes
+/// differ enough from the template and then return to the open-eye template
+/// within a valid blink duration.
+/// </summary>
 public class EyeRegionTracker : MonoBehaviour
 {
+    [Header("References")]
     public CameraFrameCorrector cameraFeed;
     public FaceDebugDraw faceDebug;
 
@@ -73,7 +83,11 @@ public class EyeRegionTracker : MonoBehaviour
     public float RightSmoothDifference01 { get; private set; }
     public float SmoothDifference01 { get; private set; }
 
-    // Compatibility values for existing encounter/debug scripts.
+    /*
+     * Compatibility values.
+     * These keep older encounter/debug scripts working even though the tracker
+     * now uses template-difference values internally.
+     */
     public float LeftRaw => 1f - LeftSmoothDifference01;
     public float RightRaw => 1f - RightSmoothDifference01;
     public float CombinedRaw => 1f - SmoothDifference01;
@@ -113,6 +127,9 @@ public class EyeRegionTracker : MonoBehaviour
         Closed
     }
 
+    const float NoTime = -999f;
+    const float LostTrackingResetDelay = 0.35f;
+
     BlinkPhase phase = BlinkPhase.Idle;
 
     RenderTexture leftEyeRT;
@@ -130,15 +147,14 @@ public class EyeRegionTracker : MonoBehaviour
 
     float nextSampleTime;
     float trackingStartTime = -1f;
-    float lastGoodSampleTime = -999f;
-    float lostTrackingResetDelay = 0.35f;
+    float lastGoodSampleTime = NoTime;
 
     float closedStartTime;
-    float lastBlinkTime = -999f;
+    float lastBlinkTime = NoTime;
     float maxClosedDifference;
 
     float openStableStartTime = -1f;
-    float suppressBlinkUntil = -999f;
+    float suppressBlinkUntil = NoTime;
 
     Rect prevLeftEyeRect01;
     Rect prevRightEyeRect01;
@@ -165,29 +181,9 @@ public class EyeRegionTracker : MonoBehaviour
     {
         BlinkThisFrame = false;
 
-        if (cameraFeed == null)
+        if (!CanSample(out string trackingError))
         {
-            HandleTrackingLoss("cameraFeed missing");
-            return;
-        }
-
-        if (faceDebug == null)
-        {
-            HandleTrackingLoss("faceDebug missing");
-            return;
-        }
-
-        if (!faceDebug.HasEyeRegions)
-        {
-            HandleTrackingLoss("Eye regions not ready");
-            return;
-        }
-
-        RenderTexture src = cameraFeed.CorrectedRT;
-
-        if (src == null)
-        {
-            HandleTrackingLoss("CorrectedRT is null");
+            HandleTrackingLoss(trackingError);
             return;
         }
 
@@ -207,6 +203,8 @@ public class EyeRegionTracker : MonoBehaviour
             LastBlinkDecision = "Ignoring head/camera movement";
             return;
         }
+
+        RenderTexture src = cameraFeed.CorrectedRT;
 
         bool leftOk = SampleEye(src, leftRect, leftEyeRT, leftEyeTex, leftCurrent, out string leftMsg);
         bool rightOk = SampleEye(src, rightRect, rightEyeRT, rightEyeTex, rightCurrent, out string rightMsg);
@@ -237,17 +235,53 @@ public class EyeRegionTracker : MonoBehaviour
         UpdateBlinkState();
     }
 
-    Rect AdjustEyeRect(Rect r)
+    bool CanSample(out string error)
     {
-        r = ClampRect01(r);
+        if (cameraFeed == null)
+        {
+            error = "cameraFeed missing";
+            return false;
+        }
 
-        Vector2 c = r.center;
-        c.y += eyeRectYOffset;
+        if (faceDebug == null)
+        {
+            error = "faceDebug missing";
+            return false;
+        }
 
-        float w = r.width * eyeRectWidthMultiplier;
-        float h = r.height * eyeRectHeightMultiplier;
+        if (!faceDebug.HasEyeRegions)
+        {
+            error = "Eye regions not ready";
+            return false;
+        }
 
-        Rect adjusted = new Rect(c.x - w * 0.5f, c.y - h * 0.5f, w, h);
+        if (cameraFeed.CorrectedRT == null)
+        {
+            error = "CorrectedRT is null";
+            return false;
+        }
+
+        error = string.Empty;
+        return true;
+    }
+
+    Rect AdjustEyeRect(Rect rect)
+    {
+        rect = ClampRect01(rect);
+
+        Vector2 center = rect.center;
+        center.y += eyeRectYOffset;
+
+        float width = rect.width * eyeRectWidthMultiplier;
+        float height = rect.height * eyeRectHeightMultiplier;
+
+        Rect adjusted = new Rect(
+            center.x - width * 0.5f,
+            center.y - height * 0.5f,
+            width,
+            height
+        );
+
         return ClampRect01(adjusted);
     }
 
@@ -284,10 +318,10 @@ public class EyeRegionTracker : MonoBehaviour
             return;
         }
 
-        float t = 1f / (sampleIndex + 1f);
+        float blend = 1f / (sampleIndex + 1f);
 
         for (int i = 0; i < current.Length; i++)
-            template[i] = Mathf.Lerp(template[i], current[i], t);
+            template[i] = Mathf.Lerp(template[i], current[i], blend);
     }
 
     void UpdateDifferenceSignals()
@@ -327,16 +361,41 @@ public class EyeRegionTracker : MonoBehaviour
             return;
         }
 
-        bool leftDifferent = LeftSmoothDifference01 >= closedDifferenceThreshold;
-        bool rightDifferent = RightSmoothDifference01 >= closedDifferenceThreshold;
+        bool closedNow = AreBothEyesDifferentFromTemplate();
+        bool openNow = AreBothEyesBackToTemplate();
 
-        bool closedNow = leftDifferent && rightDifferent;
+        UpdateOpenStableState(openNow);
 
-        bool leftBackOpen = LeftSmoothDifference01 <= reopenDifferenceThreshold;
-        bool rightBackOpen = RightSmoothDifference01 <= reopenDifferenceThreshold;
+        bool inCooldown = Time.unscaledTime - lastBlinkTime < blinkCooldown;
 
-        bool openNow = leftBackOpen && rightBackOpen;
+        switch (phase)
+        {
+            case BlinkPhase.Idle:
+                UpdateIdleBlinkState(closedNow, inCooldown);
+                break;
 
+            case BlinkPhase.Closed:
+                UpdateClosedBlinkState(openNow, inCooldown);
+                break;
+        }
+    }
+
+    bool AreBothEyesDifferentFromTemplate()
+    {
+        return
+            LeftSmoothDifference01 >= closedDifferenceThreshold &&
+            RightSmoothDifference01 >= closedDifferenceThreshold;
+    }
+
+    bool AreBothEyesBackToTemplate()
+    {
+        return
+            LeftSmoothDifference01 <= reopenDifferenceThreshold &&
+            RightSmoothDifference01 <= reopenDifferenceThreshold;
+    }
+
+    void UpdateOpenStableState(bool openNow)
+    {
         if (openNow && !MotionSuppressed)
         {
             if (openStableStartTime < 0f)
@@ -352,96 +411,96 @@ public class EyeRegionTracker : MonoBehaviour
             openStableStartTime = -1f;
             OpenStableAge = 0f;
         }
+    }
 
-        bool inCooldown = Time.unscaledTime - lastBlinkTime < blinkCooldown;
+    void UpdateIdleBlinkState(bool closedNow, bool inCooldown)
+    {
+        EyesClosed = false;
+        maxClosedDifference = 0f;
 
-        switch (phase)
+        if (inCooldown)
         {
-            case BlinkPhase.Idle:
-                {
-                    EyesClosed = false;
-                    maxClosedDifference = 0f;
+            LastBlinkDecision = "Cooldown";
+            return;
+        }
 
-                    if (inCooldown)
-                    {
-                        LastBlinkDecision = "Cooldown";
-                        return;
-                    }
+        if (!BlinkArmed)
+        {
+            LastBlinkDecision =
+                $"Waiting for open match | LDiff:{LeftSmoothDifference01:F2} RDiff:{RightSmoothDifference01:F2}";
+            return;
+        }
 
-                    if (!BlinkArmed)
-                    {
-                        LastBlinkDecision =
-                            $"Waiting for open match | LDiff:{LeftSmoothDifference01:F2} RDiff:{RightSmoothDifference01:F2}";
-                        return;
-                    }
+        if (closedNow)
+        {
+            phase = BlinkPhase.Closed;
+            EyesClosed = true;
+            BlinkArmed = false;
+            closedStartTime = Time.unscaledTime;
+            maxClosedDifference = SmoothDifference01;
 
-                    if (closedNow)
-                    {
-                        phase = BlinkPhase.Closed;
-                        EyesClosed = true;
-                        BlinkArmed = false;
-                        closedStartTime = Time.unscaledTime;
-                        maxClosedDifference = SmoothDifference01;
+            LastBlinkDecision =
+                $"Eyes changed/closed | LDiff:{LeftSmoothDifference01:F2} RDiff:{RightSmoothDifference01:F2}";
+            return;
+        }
 
-                        LastBlinkDecision =
-                            $"Eyes changed/closed | LDiff:{LeftSmoothDifference01:F2} RDiff:{RightSmoothDifference01:F2}";
-                        return;
-                    }
+        LastBlinkDecision =
+            $"Watching | LDiff:{LeftSmoothDifference01:F2} RDiff:{RightSmoothDifference01:F2}";
+    }
 
-                    LastBlinkDecision =
-                        $"Watching | LDiff:{LeftSmoothDifference01:F2} RDiff:{RightSmoothDifference01:F2}";
-                    return;
-                }
+    void UpdateClosedBlinkState(bool openNow, bool inCooldown)
+    {
+        EyesClosed = true;
+        CandidateAge = Time.unscaledTime - closedStartTime;
+        maxClosedDifference = Mathf.Max(maxClosedDifference, SmoothDifference01);
 
-            case BlinkPhase.Closed:
-                {
-                    EyesClosed = true;
-                    CandidateAge = Time.unscaledTime - closedStartTime;
-                    maxClosedDifference = Mathf.Max(maxClosedDifference, SmoothDifference01);
+        if (openNow)
+        {
+            TryAcceptBlink(inCooldown);
+            ResetBlinkPhaseOnly();
+            return;
+        }
 
-                    if (openNow)
-                    {
-                        float closedDuration = Time.unscaledTime - closedStartTime;
+        if (CandidateAge > maxBlinkClosedTime)
+        {
+            LastBlinkDecision = "Rejected: eyes held changed/closed too long";
+            ResetBlinkPhaseOnly();
+            return;
+        }
 
-                        bool validBlink =
-                            closedDuration >= minBlinkClosedTime &&
-                            closedDuration <= maxBlinkClosedTime &&
-                            !inCooldown;
+        LastBlinkDecision = $"Closed holding | {CandidateAge:F2}s";
+    }
 
-                        if (validBlink)
-                        {
-                            BlinkCount++;
-                            BlinkThisFrame = true;
-                            lastBlinkTime = Time.unscaledTime;
+    void TryAcceptBlink(bool inCooldown)
+    {
+        float closedDuration = Time.unscaledTime - closedStartTime;
 
-                            LastBlinkDecision = $"Blink accepted ({closedDuration:F2}s)";
+        bool validBlink =
+            closedDuration >= minBlinkClosedTime &&
+            closedDuration <= maxBlinkClosedTime &&
+            !inCooldown;
 
-                            if (logBlinkEvents)
-                                Debug.Log($"Blink detected | count={BlinkCount} | duration={closedDuration:F3}s");
-                        }
-                        else if (closedDuration < minBlinkClosedTime)
-                        {
-                            LastBlinkDecision = $"Rejected too fast ({closedDuration:F2}s)";
-                        }
-                        else
-                        {
-                            LastBlinkDecision = $"Rejected too long ({closedDuration:F2}s)";
-                        }
+        if (validBlink)
+        {
+            BlinkCount++;
+            BlinkThisFrame = true;
+            lastBlinkTime = Time.unscaledTime;
 
-                        ResetBlinkPhaseOnly();
-                        return;
-                    }
+            LastBlinkDecision = $"Blink accepted ({closedDuration:F2}s)";
 
-                    if (CandidateAge > maxBlinkClosedTime)
-                    {
-                        LastBlinkDecision = "Rejected: eyes held changed/closed too long";
-                        ResetBlinkPhaseOnly();
-                        return;
-                    }
+            if (logBlinkEvents)
+                Debug.Log($"Blink detected | count={BlinkCount} | duration={closedDuration:F3}s");
 
-                    LastBlinkDecision = $"Closed holding | {CandidateAge:F2}s";
-                    return;
-                }
+            return;
+        }
+
+        if (closedDuration < minBlinkClosedTime)
+        {
+            LastBlinkDecision = $"Rejected too fast ({closedDuration:F2}s)";
+        }
+        else
+        {
+            LastBlinkDecision = $"Rejected too long ({closedDuration:F2}s)";
         }
     }
 
@@ -487,14 +546,17 @@ public class EyeRegionTracker : MonoBehaviour
 
         ResetBlinkPhaseOnly();
 
-        if (lastGoodSampleTime >= 0f && Time.unscaledTime - lastGoodSampleTime > lostTrackingResetDelay)
+        bool trackingWasRecentlyValid = lastGoodSampleTime >= 0f;
+        bool trackingLostTooLong = Time.unscaledTime - lastGoodSampleTime > LostTrackingResetDelay;
+
+        if (trackingWasRecentlyValid && trackingLostTooLong)
         {
             InvalidateTracking(false);
             LastSampleStatus += " | hard reset";
         }
     }
 
-    bool UpdateMotionSuppression(Rect left, Rect right)
+    bool UpdateMotionSuppression(Rect leftRect, Rect rightRect)
     {
         if (!useMotionGuard)
         {
@@ -504,28 +566,21 @@ public class EyeRegionTracker : MonoBehaviour
 
         if (!havePrevEyeRects)
         {
-            prevLeftEyeRect01 = left;
-            prevRightEyeRect01 = right;
+            prevLeftEyeRect01 = leftRect;
+            prevRightEyeRect01 = rightRect;
             havePrevEyeRects = true;
             MotionSuppressed = false;
             return false;
         }
 
-        float leftMove = Vector2.Distance(left.center, prevLeftEyeRect01.center) / Mathf.Max(left.width, 0.0001f);
-        float rightMove = Vector2.Distance(right.center, prevRightEyeRect01.center) / Mathf.Max(right.width, 0.0001f);
+        float leftMove = GetRectMoveAmount(leftRect, prevLeftEyeRect01);
+        float rightMove = GetRectMoveAmount(rightRect, prevRightEyeRect01);
 
-        float leftSizeChange = Mathf.Max(
-            Mathf.Abs(left.width - prevLeftEyeRect01.width) / Mathf.Max(prevLeftEyeRect01.width, 0.0001f),
-            Mathf.Abs(left.height - prevLeftEyeRect01.height) / Mathf.Max(prevLeftEyeRect01.height, 0.0001f)
-        );
+        float leftSizeChange = GetRectSizeChange(leftRect, prevLeftEyeRect01);
+        float rightSizeChange = GetRectSizeChange(rightRect, prevRightEyeRect01);
 
-        float rightSizeChange = Mathf.Max(
-            Mathf.Abs(right.width - prevRightEyeRect01.width) / Mathf.Max(prevRightEyeRect01.width, 0.0001f),
-            Mathf.Abs(right.height - prevRightEyeRect01.height) / Mathf.Max(prevRightEyeRect01.height, 0.0001f)
-        );
-
-        prevLeftEyeRect01 = left;
-        prevRightEyeRect01 = right;
+        prevLeftEyeRect01 = leftRect;
+        prevRightEyeRect01 = rightRect;
 
         bool movedTooMuch =
             leftMove > rectMoveRejectFrac ||
@@ -543,25 +598,45 @@ public class EyeRegionTracker : MonoBehaviour
         return MotionSuppressed;
     }
 
-    bool SampleEye(RenderTexture src, Rect eyeRect01TopLeft, RenderTexture dst, Texture2D dstTex, float[] outputSignature, out string message)
+    float GetRectMoveAmount(Rect current, Rect previous)
+    {
+        return Vector2.Distance(current.center, previous.center) / Mathf.Max(current.width, 0.0001f);
+    }
+
+    float GetRectSizeChange(Rect current, Rect previous)
+    {
+        float widthChange = Mathf.Abs(current.width - previous.width) / Mathf.Max(previous.width, 0.0001f);
+        float heightChange = Mathf.Abs(current.height - previous.height) / Mathf.Max(previous.height, 0.0001f);
+
+        return Mathf.Max(widthChange, heightChange);
+    }
+
+    bool SampleEye(
+        RenderTexture source,
+        Rect eyeRect01TopLeft,
+        RenderTexture destination,
+        Texture2D destinationTexture,
+        float[] outputSignature,
+        out string message
+    )
     {
         message = "Unknown";
 
-        if (src == null)
+        if (source == null)
         {
-            message = "src null";
+            message = "source null";
             return false;
         }
 
-        if (dst == null)
+        if (destination == null)
         {
-            message = "dst null";
+            message = "destination null";
             return false;
         }
 
-        if (dstTex == null)
+        if (destinationTexture == null)
         {
-            message = "dstTex null";
+            message = "destinationTexture null";
             return false;
         }
 
@@ -571,36 +646,37 @@ public class EyeRegionTracker : MonoBehaviour
             return false;
         }
 
-        Rect r = ClampRect01(eyeRect01TopLeft);
+        Rect rect = ClampRect01(eyeRect01TopLeft);
 
-        if (r.width <= 0f || r.height <= 0f)
+        if (rect.width <= 0f || rect.height <= 0f)
         {
             message = "invalid rect";
             return false;
         }
 
-        Vector2 scale = new Vector2(r.width, r.height);
-        Vector2 offset = new Vector2(r.xMin, 1f - r.yMax);
+        Vector2 scale = new Vector2(rect.width, rect.height);
+        Vector2 offset = new Vector2(rect.xMin, 1f - rect.yMax);
 
-        Graphics.Blit(src, dst, scale, offset);
+        Graphics.Blit(source, destination, scale, offset);
 
-        RenderTexture previous = RenderTexture.active;
-        RenderTexture.active = dst;
+        RenderTexture previousActiveRT = RenderTexture.active;
+        RenderTexture.active = destination;
 
-        dstTex.ReadPixels(new Rect(0, 0, dst.width, dst.height), 0, 0, false);
-        dstTex.Apply(false, false);
+        destinationTexture.ReadPixels(new Rect(0, 0, destination.width, destination.height), 0, 0, false);
+        destinationTexture.Apply(false, false);
 
-        RenderTexture.active = previous;
+        RenderTexture.active = previousActiveRT;
 
-        Color32[] pixels = dstTex.GetPixels32();
+        Color32[] pixels = destinationTexture.GetPixels32();
 
-        if (pixels == null || pixels.Length != dst.width * dst.height)
+        if (pixels == null || pixels.Length != destination.width * destination.height)
         {
             message = "pixel read failed";
             return false;
         }
 
-        BuildLightingNormalisedSignature(pixels, dst.width, dst.height, outputSignature);
+        BuildLightingNormalisedSignature(pixels, destination.width, destination.height, outputSignature);
+
         message = "ok";
         return true;
     }
@@ -610,8 +686,8 @@ public class EyeRegionTracker : MonoBehaviour
         if (pixels == null || output == null || pixels.Length < width * height || output.Length < width * height)
             return;
 
-        float sum = 0f;
         int count = width * height;
+        float sum = 0f;
 
         for (int i = 0; i < count; i++)
             sum += Luma(pixels[i]);
@@ -622,56 +698,50 @@ public class EyeRegionTracker : MonoBehaviour
 
         for (int i = 0; i < count; i++)
         {
-            float d = Luma(pixels[i]) - mean;
-            varianceSum += d * d;
+            float difference = Luma(pixels[i]) - mean;
+            varianceSum += difference * difference;
         }
 
-        float std = Mathf.Sqrt(varianceSum / Mathf.Max(1, count));
-        std = Mathf.Max(std, 8f);
+        float standardDeviation = Mathf.Sqrt(varianceSum / Mathf.Max(1, count));
+        standardDeviation = Mathf.Max(standardDeviation, 8f);
 
         for (int i = 0; i < count; i++)
         {
-            float l = Luma(pixels[i]);
+            float luma = Luma(pixels[i]);
 
             // Local contrast normalisation.
-            // 0.5 = local average, lower = darker than local average, higher = brighter.
-            float normalised = 0.5f + ((l - mean) / (std * 4f));
+            // 0.5 = local average.
+            // Lower values are darker than local average.
+            // Higher values are brighter than local average.
+            float normalised = 0.5f + ((luma - mean) / (standardDeviation * 4f));
             output[i] = Mathf.Clamp01(normalised);
         }
     }
 
-    float Luma(Color32 c)
+    float Luma(Color32 colour)
     {
-        return 0.299f * c.r + 0.587f * c.g + 0.114f * c.b;
+        return 0.299f * colour.r + 0.587f * colour.g + 0.114f * colour.b;
     }
 
-    Rect ClampRect01(Rect r)
+    Rect ClampRect01(Rect rect)
     {
-        float xMin = Mathf.Clamp01(r.xMin);
-        float yMin = Mathf.Clamp01(r.yMin);
-        float xMax = Mathf.Clamp01(r.xMax);
-        float yMax = Mathf.Clamp01(r.yMax);
+        float xMin = Mathf.Clamp01(rect.xMin);
+        float yMin = Mathf.Clamp01(rect.yMin);
+        float xMax = Mathf.Clamp01(rect.xMax);
+        float yMax = Mathf.Clamp01(rect.yMax);
 
         if (xMax < xMin)
-        {
-            float temp = xMin;
-            xMin = xMax;
-            xMax = temp;
-        }
+            (xMin, xMax) = (xMax, xMin);
 
         if (yMax < yMin)
-        {
-            float temp = yMin;
-            yMin = yMax;
-            yMax = temp;
-        }
+            (yMin, yMax) = (yMax, yMin);
 
         return Rect.MinMaxRect(xMin, yMin, xMax, yMax);
     }
 
     void CreateBuffers()
     {
-        bool recreate =
+        bool shouldRecreate =
             leftEyeRT == null ||
             rightEyeRT == null ||
             leftEyeTex == null ||
@@ -685,46 +755,45 @@ public class EyeRegionTracker : MonoBehaviour
             rightEyeRT.width != sampleWidth ||
             rightEyeRT.height != sampleHeight;
 
-        if (!recreate)
+        if (!shouldRecreate)
             return;
 
         ReleaseBuffers();
 
-        leftEyeRT = new RenderTexture(sampleWidth, sampleHeight, 0, RenderTextureFormat.ARGB32);
-        leftEyeRT.filterMode = FilterMode.Bilinear;
-        leftEyeRT.wrapMode = TextureWrapMode.Clamp;
-        leftEyeRT.Create();
-
-        rightEyeRT = new RenderTexture(sampleWidth, sampleHeight, 0, RenderTextureFormat.ARGB32);
-        rightEyeRT.filterMode = FilterMode.Bilinear;
-        rightEyeRT.wrapMode = TextureWrapMode.Clamp;
-        rightEyeRT.Create();
+        leftEyeRT = CreateEyeRenderTexture();
+        rightEyeRT = CreateEyeRenderTexture();
 
         leftEyeTex = new Texture2D(sampleWidth, sampleHeight, TextureFormat.RGBA32, false, false);
         rightEyeTex = new Texture2D(sampleWidth, sampleHeight, TextureFormat.RGBA32, false, false);
 
-        int len = sampleWidth * sampleHeight;
-        leftTemplate = new float[len];
-        rightTemplate = new float[len];
-        leftCurrent = new float[len];
-        rightCurrent = new float[len];
+        int signatureLength = sampleWidth * sampleHeight;
+
+        leftTemplate = new float[signatureLength];
+        rightTemplate = new float[signatureLength];
+        leftCurrent = new float[signatureLength];
+        rightCurrent = new float[signatureLength];
+    }
+
+    RenderTexture CreateEyeRenderTexture()
+    {
+        RenderTexture rt = new RenderTexture(sampleWidth, sampleHeight, 0, RenderTextureFormat.ARGB32)
+        {
+            filterMode = FilterMode.Bilinear,
+            wrapMode = TextureWrapMode.Clamp
+        };
+
+        rt.Create();
+        return rt;
     }
 
     void InvalidateTracking(bool clearBlinkCount)
     {
         CreateBuffers();
 
-        if (leftTemplate != null)
-            System.Array.Clear(leftTemplate, 0, leftTemplate.Length);
-
-        if (rightTemplate != null)
-            System.Array.Clear(rightTemplate, 0, rightTemplate.Length);
-
-        if (leftCurrent != null)
-            System.Array.Clear(leftCurrent, 0, leftCurrent.Length);
-
-        if (rightCurrent != null)
-            System.Array.Clear(rightCurrent, 0, rightCurrent.Length);
+        ClearArray(leftTemplate);
+        ClearArray(rightTemplate);
+        ClearArray(leftCurrent);
+        ClearArray(rightCurrent);
 
         templateReady = false;
         calibrationSampleCount = 0;
@@ -752,26 +821,22 @@ public class EyeRegionTracker : MonoBehaviour
         phase = BlinkPhase.Idle;
 
         trackingStartTime = -1f;
-        lastGoodSampleTime = -999f;
-        lastBlinkTime = -999f;
+        lastGoodSampleTime = NoTime;
+        lastBlinkTime = NoTime;
         closedStartTime = 0f;
         maxClosedDifference = 0f;
         openStableStartTime = -1f;
-        suppressBlinkUntil = -999f;
+        suppressBlinkUntil = NoTime;
         havePrevEyeRects = false;
 
         if (clearBlinkCount)
             BlinkCount = 0;
     }
 
-    void EnsureDebugStyle()
+    void ClearArray(float[] array)
     {
-        if (debugTextStyle != null)
-            return;
-
-        debugTextStyle = new GUIStyle(GUI.skin.label);
-        debugTextStyle.fontSize = debugFontSize;
-        debugTextStyle.normal.textColor = Color.white;
+        if (array != null)
+            System.Array.Clear(array, 0, array.Length);
     }
 
     void OnGUI()
@@ -790,20 +855,31 @@ public class EyeRegionTracker : MonoBehaviour
             $"BlinkCount:{BlinkCount} | MotionIgnored:{MotionSuppressed} | Calibrating:{IsCalibrating} | Template:{TemplateReady}\n" +
             $"Decision: {LastBlinkDecision}";
 
-        GUI.Label(new Rect(x, y, Screen.width - 20, 180), text, debugTextStyle);
+        GUI.Label(new Rect(x, y, Screen.width - 20f, 180f), text, debugTextStyle);
 
         if (showEyeSamplePreview)
-        {
-            float w = sampleWidth * 8f;
-            float h = sampleHeight * 8f;
-            float previewY = y + 170f;
+            DrawEyeSamplePreview(x, y + 170f);
+    }
 
-            if (leftEyeTex != null)
-                GUI.DrawTexture(new Rect(x, previewY, w, h), leftEyeTex, ScaleMode.StretchToFill, false);
+    void EnsureDebugStyle()
+    {
+        if (debugTextStyle == null)
+            debugTextStyle = new GUIStyle(GUI.skin.label);
 
-            if (rightEyeTex != null)
-                GUI.DrawTexture(new Rect(x + w + 20f, previewY, w, h), rightEyeTex, ScaleMode.StretchToFill, false);
-        }
+        debugTextStyle.fontSize = debugFontSize;
+        debugTextStyle.normal.textColor = Color.white;
+    }
+
+    void DrawEyeSamplePreview(float x, float y)
+    {
+        float width = sampleWidth * 8f;
+        float height = sampleHeight * 8f;
+
+        if (leftEyeTex != null)
+            GUI.DrawTexture(new Rect(x, y, width, height), leftEyeTex, ScaleMode.StretchToFill, false);
+
+        if (rightEyeTex != null)
+            GUI.DrawTexture(new Rect(x + width + 20f, y, width, height), rightEyeTex, ScaleMode.StretchToFill, false);
     }
 
     void OnDestroy()

@@ -1,10 +1,19 @@
 using UnityEngine;
 using UnityEngine.UI;
 
+/// <summary>
+/// Opens the device camera and writes a corrected camera image into a RenderTexture.
+///
+/// The corrected RenderTexture is used by both the visual camera preview and the
+/// face/eye tracking pipeline, so they all work from the same rotated/mirrored frame.
+/// </summary>
 public class CameraFrameCorrector : MonoBehaviour
 {
-    [Header("UI Preview (optional)")]
+    [Header("UI Preview")]
+    [Tooltip("Optional RawImage used to show the corrected camera feed.")]
     public RawImage preview;
+
+    [Tooltip("Optional fitter used to keep the preview at the corrected camera aspect ratio.")]
     public AspectRatioFitter aspectFitter;
 
     [Header("Shader")]
@@ -22,122 +31,179 @@ public class CameraFrameCorrector : MonoBehaviour
     [Range(0, 3)] public int rotationOffset90 = 0;
 
     [Header("Debug")]
-    public bool logCameraMeta = true;
+    public bool logCameraMeta = false;
 
     public RenderTexture CorrectedRT { get; private set; }
     public WebCamTexture CamTex { get; private set; }
-
-    Material blitMat;
-    bool isFront;
-
-    int lastLoggedRot = -999;
-    bool lastLoggedVMirror = false;
-    bool hasLogged = false;
 
     static readonly int Rot90ID = Shader.PropertyToID("_Rot90");
     static readonly int FlipXID = Shader.PropertyToID("_FlipX");
     static readonly int FlipYID = Shader.PropertyToID("_FlipY");
 
+    Material blitMaterial;
+    bool isFrontCamera;
+
+    int lastLoggedRotation = -999;
+    bool lastLoggedVerticalMirror;
+    bool hasLoggedMeta;
+
     void Start()
     {
-        Shader s = cameraRotateFlipShader != null
-            ? cameraRotateFlipShader
-            : Shader.Find("Hidden/CameraRotateFlip");
-
-        if (s == null)
+        if (!CreateBlitMaterial())
         {
-            Debug.LogError("Missing shader: Hidden/CameraRotateFlip");
             enabled = false;
             return;
         }
 
-        blitMat = new Material(s);
-
-        var devices = WebCamTexture.devices;
-        if (devices == null || devices.Length == 0)
+        if (!StartCamera())
         {
-            Debug.LogError("No camera devices found.");
             enabled = false;
             return;
         }
 
-        string camName = null;
-
-        for (int i = 0; i < devices.Length; i++)
-        {
-            if (devices[i].isFrontFacing)
-            {
-                camName = devices[i].name;
-                isFront = true;
-                break;
-            }
-        }
-
-        if (string.IsNullOrEmpty(camName))
-        {
-            camName = devices[0].name;
-            isFront = devices[0].isFrontFacing;
-        }
-
-        CamTex = new WebCamTexture(camName, requestWidth, requestHeight, requestFPS);
-        CamTex.Play();
-
-        if (preview != null)
-        {
-            preview.texture = null;
-            preview.rectTransform.localEulerAngles = Vector3.zero;
-            preview.rectTransform.localScale = Vector3.one;
-        }
+        ResetPreviewTransform();
     }
 
     void Update()
     {
-        if (CamTex == null || !CamTex.isPlaying || CamTex.width <= 16)
+        if (!CameraIsReady())
             return;
 
-        if (logCameraMeta &&
-            (!hasLogged ||
-             lastLoggedRot != CamTex.videoRotationAngle ||
-             lastLoggedVMirror != CamTex.videoVerticallyMirrored))
-        {
-            Debug.Log(
-                $"Camera meta -> raw={CamTex.width}x{CamTex.height}, " +
-                $"videoRotationAngle={CamTex.videoRotationAngle}, " +
-                $"videoVerticallyMirrored={CamTex.videoVerticallyMirrored}, " +
-                $"isFront={isFront}"
-            );
+        LogCameraMetadataIfNeeded();
 
-            lastLoggedRot = CamTex.videoRotationAngle;
-            lastLoggedVMirror = CamTex.videoVerticallyMirrored;
-            hasLogged = true;
+        int rawWidth = CamTex.width;
+        int rawHeight = CamTex.height;
+
+        int rotation90 = GetCorrectedRotation90();
+        bool swapsWidthAndHeight = (rotation90 & 1) == 1;
+
+        int outputWidth = swapsWidthAndHeight ? rawHeight : rawWidth;
+        int outputHeight = swapsWidthAndHeight ? rawWidth : rawHeight;
+
+        EnsureRenderTexture(outputWidth, outputHeight);
+        UpdateBlitMaterial(rotation90);
+
+        Graphics.Blit(CamTex, CorrectedRT, blitMaterial);
+
+        UpdatePreview(outputWidth, outputHeight);
+    }
+
+    bool CreateBlitMaterial()
+    {
+        Shader shader = cameraRotateFlipShader != null
+            ? cameraRotateFlipShader
+            : Shader.Find("Hidden/CameraRotateFlip");
+
+        if (shader == null)
+        {
+            Debug.LogError("CameraFrameCorrector: Missing shader 'Hidden/CameraRotateFlip'.");
+            return false;
         }
 
-        int rawW = CamTex.width;
-        int rawH = CamTex.height;
+        blitMaterial = new Material(shader);
+        return true;
+    }
 
-        int rot = ((CamTex.videoRotationAngle / 90) + rotationOffset90) & 3;
-        bool swapWH = (rot & 1) == 1;
+    bool StartCamera()
+    {
+        WebCamDevice[] devices = WebCamTexture.devices;
 
-        int outW = swapWH ? rawH : rawW;
-        int outH = swapWH ? rawW : rawH;
+        if (devices == null || devices.Length == 0)
+        {
+            Debug.LogError("CameraFrameCorrector: No camera devices found.");
+            return false;
+        }
 
-        EnsureRenderTexture(outW, outH);
+        WebCamDevice selectedDevice = SelectCamera(devices);
 
-        int flipX = (isFront && mirrorFrontCamera) ? 1 : 0;
+        isFrontCamera = selectedDevice.isFrontFacing;
+
+        CamTex = new WebCamTexture(
+            selectedDevice.name,
+            requestWidth,
+            requestHeight,
+            requestFPS
+        );
+
+        CamTex.Play();
+
+        return true;
+    }
+
+    WebCamDevice SelectCamera(WebCamDevice[] devices)
+    {
+        for (int i = 0; i < devices.Length; i++)
+        {
+            if (devices[i].isFrontFacing)
+                return devices[i];
+        }
+
+        Debug.LogWarning("CameraFrameCorrector: No front camera found. Falling back to first available camera.");
+        return devices[0];
+    }
+
+    bool CameraIsReady()
+    {
+        return CamTex != null && CamTex.isPlaying && CamTex.width > 16;
+    }
+
+    int GetCorrectedRotation90()
+    {
+        return ((CamTex.videoRotationAngle / 90) + rotationOffset90) & 3;
+    }
+
+    void UpdateBlitMaterial(int rotation90)
+    {
+        int flipX = isFrontCamera && mirrorFrontCamera ? 1 : 0;
         int flipY = CamTex.videoVerticallyMirrored ? 1 : 0;
 
+        blitMaterial.SetFloat(Rot90ID, rotation90);
+        blitMaterial.SetFloat(FlipXID, flipX);
+        blitMaterial.SetFloat(FlipYID, flipY);
+    }
 
-        blitMat.SetFloat(Rot90ID, rot);
-        blitMat.SetFloat(FlipXID, flipX);
-        blitMat.SetFloat(FlipYID, flipY);
+    void ResetPreviewTransform()
+    {
+        if (preview == null)
+            return;
 
-        Graphics.Blit(CamTex, CorrectedRT, blitMat);
+        preview.texture = null;
+        preview.rectTransform.localEulerAngles = Vector3.zero;
+        preview.rectTransform.localScale = Vector3.one;
+    }
 
+    void UpdatePreview(int outputWidth, int outputHeight)
+    {
         if (preview != null && preview.texture != CorrectedRT)
             preview.texture = CorrectedRT;
 
-        if (aspectFitter != null)
-            aspectFitter.aspectRatio = (float)outW / outH;
+        if (aspectFitter != null && outputHeight > 0)
+            aspectFitter.aspectRatio = (float)outputWidth / outputHeight;
+    }
+
+    void LogCameraMetadataIfNeeded()
+    {
+        if (!logCameraMeta)
+            return;
+
+        bool metadataChanged =
+            !hasLoggedMeta ||
+            lastLoggedRotation != CamTex.videoRotationAngle ||
+            lastLoggedVerticalMirror != CamTex.videoVerticallyMirrored;
+
+        if (!metadataChanged)
+            return;
+
+        Debug.Log(
+            $"Camera meta -> raw={CamTex.width}x{CamTex.height}, " +
+            $"videoRotationAngle={CamTex.videoRotationAngle}, " +
+            $"videoVerticallyMirrored={CamTex.videoVerticallyMirrored}, " +
+            $"isFront={isFrontCamera}"
+        );
+
+        lastLoggedRotation = CamTex.videoRotationAngle;
+        lastLoggedVerticalMirror = CamTex.videoVerticallyMirrored;
+        hasLoggedMeta = true;
     }
 
     void EnsureRenderTexture(int width, int height)
@@ -145,30 +211,43 @@ public class CameraFrameCorrector : MonoBehaviour
         if (CorrectedRT != null && CorrectedRT.width == width && CorrectedRT.height == height)
             return;
 
-        if (CorrectedRT != null)
-        {
-            CorrectedRT.Release();
-            Destroy(CorrectedRT);
-        }
+        ReleaseCorrectedRenderTexture();
 
-        CorrectedRT = new RenderTexture(width, height, 0, RenderTextureFormat.ARGB32);
-        CorrectedRT.filterMode = FilterMode.Bilinear;
-        CorrectedRT.wrapMode = TextureWrapMode.Clamp;
+        CorrectedRT = new RenderTexture(width, height, 0, RenderTextureFormat.ARGB32)
+        {
+            filterMode = FilterMode.Bilinear,
+            wrapMode = TextureWrapMode.Clamp
+        };
+
         CorrectedRT.Create();
+    }
+
+    void ReleaseCorrectedRenderTexture()
+    {
+        if (CorrectedRT == null)
+            return;
+
+        CorrectedRT.Release();
+        Destroy(CorrectedRT);
+        CorrectedRT = null;
     }
 
     void OnDestroy()
     {
-        if (CamTex != null && CamTex.isPlaying)
-            CamTex.Stop();
-
-        if (CorrectedRT != null)
+        if (CamTex != null)
         {
-            CorrectedRT.Release();
-            Destroy(CorrectedRT);
+            if (CamTex.isPlaying)
+                CamTex.Stop();
+
+            CamTex = null;
         }
 
-        if (blitMat != null)
-            Destroy(blitMat);
+        ReleaseCorrectedRenderTexture();
+
+        if (blitMaterial != null)
+        {
+            Destroy(blitMaterial);
+            blitMaterial = null;
+        }
     }
 }

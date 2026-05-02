@@ -1,195 +1,295 @@
+using System.Collections.Generic;
+using Unity.InferenceEngine;
 using UnityEngine;
 
+/// <summary>
+/// Runs a BlazeFace ONNX model through Unity Inference Engine/Sentis
+/// and returns a normalised face rectangle plus six facial keypoints.
+///
+/// This script is used by the front-camera eye tracking pipeline.
+/// </summary>
 public class BlazeFaceSentis : MonoBehaviour
 {
-    public Unity.InferenceEngine.ModelAsset blazeFaceOnnx;
-    public Unity.InferenceEngine.BackendType backend = Unity.InferenceEngine.BackendType.CPU;
+    [Header("Model")]
+    public ModelAsset blazeFaceOnnx;
+    public BackendType backend = BackendType.CPU;
 
     [Header("Thresholds")]
     [Range(0.05f, 0.99f)] public float scoreThreshold = 0.35f;
 
     [Header("Debug")]
-    public bool verboseLogging = true;
-    public int logEveryNFrames = 30;
+    public bool verboseLogging = false;
+    [Min(1)] public int logEveryNFrames = 30;
 
-    SentisModelRunner runner;
-    Unity.InferenceEngine.Tensor<float> input;
-    Unity.InferenceEngine.TextureTransform toNHWC128;
-
-    const int InSize = 128;
+    const int InputSize = 128;
     const int NumAnchors = 896;
     const int BoxStride = 16;
 
+    SentisModelRunner runner;
+    Tensor<float> input;
+    TextureTransform toNHWC128;
+
     Vector2[] anchors;
-    RenderTexture rt128;
+    RenderTexture resizedInputRT;
 
     void Awake()
     {
-        if (backend == Unity.InferenceEngine.BackendType.GPUCompute && !SystemInfo.supportsComputeShaders)
-            backend = Unity.InferenceEngine.BackendType.CPU;
+        if (blazeFaceOnnx == null)
+        {
+            Debug.LogError("BlazeFaceSentis: No BlazeFace ONNX model assigned.");
+            enabled = false;
+            return;
+        }
+
+        if (backend == BackendType.GPUCompute && !SystemInfo.supportsComputeShaders)
+        {
+            Debug.LogWarning("BlazeFaceSentis: GPUCompute is not supported on this device. Falling back to CPU.");
+            backend = BackendType.CPU;
+        }
 
         runner = new SentisModelRunner(blazeFaceOnnx, backend);
 
-        input = new Unity.InferenceEngine.Tensor<float>(
-            new Unity.InferenceEngine.TensorShape(1, InSize, InSize, 3)
+        input = new Tensor<float>(
+            new TensorShape(1, InputSize, InputSize, 3)
         );
 
-        toNHWC128 = new Unity.InferenceEngine.TextureTransform()
-            .SetDimensions(InSize, InSize, 3)
-            .SetTensorLayout(Unity.InferenceEngine.TensorLayout.NHWC);
+        toNHWC128 = new TextureTransform()
+            .SetDimensions(InputSize, InputSize, 3)
+            .SetTensorLayout(TensorLayout.NHWC);
 
         anchors = BuildAnchors();
 
-        rt128 = new RenderTexture(InSize, InSize, 0, RenderTextureFormat.ARGB32);
-        rt128.filterMode = FilterMode.Bilinear;
-        rt128.wrapMode = TextureWrapMode.Clamp;
-        rt128.Create();
+        resizedInputRT = CreateInputRenderTexture();
 
-        Debug.Log($"BlazeFaceSentis Awake -> backend = {backend}");
+        if (ShouldLog())
+            Debug.Log($"BlazeFaceSentis initialised with backend: {backend}");
     }
 
-    public bool TryDetect(Texture src, out FaceDet det)
+    public bool TryDetect(Texture sourceTexture, out FaceDet detection)
     {
-        det = default;
+        detection = default;
 
-        if (src == null || runner == null || input == null)
+        if (!CanRun(sourceTexture))
             return false;
 
-        Graphics.Blit(src, rt128);
-        Unity.InferenceEngine.TextureConverter.ToTensor(rt128, input, toNHWC128);
+        RunModel(sourceTexture);
 
-        runner.Worker.Schedule(input);
+        Tensor<float> rawOutput0 = runner.Worker.PeekOutput(0) as Tensor<float>;
+        Tensor<float> rawOutput1 = runner.Worker.PeekOutput(1) as Tensor<float>;
 
-        var out0Raw = runner.Worker.PeekOutput(0) as Unity.InferenceEngine.Tensor<float>;
-        var out1Raw = runner.Worker.PeekOutput(1) as Unity.InferenceEngine.Tensor<float>;
-
-        if (out0Raw == null || out1Raw == null)
+        if (rawOutput0 == null || rawOutput1 == null)
         {
-            if (verboseLogging && Time.frameCount % logEveryNFrames == 0)
-                Debug.LogWarning("BlazeFaceSentis: one or more outputs were null.");
+            LogWarning("One or more model outputs were null.");
             return false;
         }
 
-        using var out0 = out0Raw.ReadbackAndClone();
-        using var out1 = out1Raw.ReadbackAndClone();
+        using Tensor<float> output0 = rawOutput0.ReadbackAndClone();
+        using Tensor<float> output1 = rawOutput1.ReadbackAndClone();
 
-        // Usually boxes has far more values than scores.
-        bool out0IsBoxes = out0.count >= out1.count;
+        GetBoxesAndScores(output0, output1, out float[] boxes, out float[] scores);
 
-        var boxesArr = out0IsBoxes ? out0.DownloadToArray() : out1.DownloadToArray();
-        var scoresArr = out0IsBoxes ? out1.DownloadToArray() : out0.DownloadToArray();
+        if (boxes == null || boxes.Length == 0 || scores == null || scores.Length == 0)
+            return false;
 
-        if (verboseLogging && Time.frameCount % logEveryNFrames == 0)
+        if (ShouldLog())
         {
             Debug.Log(
-                $"BlazeFaceSentis -> out0.count={out0.count}, out1.count={out1.count}, " +
-                $"boxesLen={boxesArr.Length}, scoresLen={scoresArr.Length}"
+                $"BlazeFaceSentis outputs -> " +
+                $"out0.count={output0.count}, out1.count={output1.count}, " +
+                $"boxesLen={boxes.Length}, scoresLen={scores.Length}"
             );
         }
 
-        if (scoresArr == null || scoresArr.Length == 0 || boxesArr == null || boxesArr.Length == 0)
+        int bestIndex = FindBestScoreIndex(scores, out float bestScore);
+
+        if (ShouldLog())
+            Debug.Log($"BlazeFaceSentis best -> index={bestIndex}, score={bestScore:F4}, threshold={scoreThreshold:F2}");
+
+        if (bestIndex < 0 || bestScore < scoreThreshold)
             return false;
 
-        float best = -1f;
-        int bestIdx = -1;
-
-        int scoreCount = Mathf.Min(NumAnchors, scoresArr.Length);
-
-        for (int i = 0; i < scoreCount; i++)
-        {
-            float p = ToProbability(scoresArr[i]);
-
-            if (p > best)
-            {
-                best = p;
-                bestIdx = i;
-            }
-        }
-
-        if (verboseLogging && Time.frameCount % logEveryNFrames == 0)
-            Debug.Log($"BlazeFaceSentis -> bestIdx={bestIdx}, bestScore={best:F4}, threshold={scoreThreshold:F2}");
-
-        if (bestIdx < 0 || best < scoreThreshold)
+        if (!TryDecodeDetection(boxes, bestIndex, bestScore, out detection))
             return false;
-
-        int baseOff = bestIdx * BoxStride;
-
-        if (baseOff + 15 >= boxesArr.Length || bestIdx >= anchors.Length)
-        {
-            if (verboseLogging && Time.frameCount % logEveryNFrames == 0)
-                Debug.LogWarning("BlazeFaceSentis: output indexing exceeded expected bounds.");
-            return false;
-        }
-
-        float x = boxesArr[baseOff + 0] + anchors[bestIdx].x * InSize;
-        float y = boxesArr[baseOff + 1] + anchors[bestIdx].y * InSize;
-        float w = boxesArr[baseOff + 2];
-        float h = boxesArr[baseOff + 3];
-
-        Rect r = new Rect(
-            (x - 0.5f * w) / InSize,
-            (y - 0.5f * h) / InSize,
-            w / InSize,
-            h / InSize
-        );
-
-        det.score = best;
-        det.faceRect01 = ClampRect01(r);
-
-        det.kp01 = new Vector2[6];
-        for (int k = 0; k < 6; k++)
-        {
-            float kx = boxesArr[baseOff + 4 + 2 * k + 0] + anchors[bestIdx].x * InSize;
-            float ky = boxesArr[baseOff + 4 + 2 * k + 1] + anchors[bestIdx].y * InSize;
-            det.kp01[k] = new Vector2(kx / InSize, ky / InSize);
-        }
 
         return true;
     }
 
-    static float ToProbability(float v)
+    bool CanRun(Texture sourceTexture)
     {
-        // If it's already a probability, keep it.
-        if (v >= 0f && v <= 1f)
-            return v;
-
-        // Otherwise treat it like a logit.
-        return 1f / (1f + Mathf.Exp(-v));
+        return
+            sourceTexture != null &&
+            runner != null &&
+            runner.Worker != null &&
+            input != null &&
+            resizedInputRT != null &&
+            anchors != null &&
+            anchors.Length == NumAnchors;
     }
 
-    static Rect ClampRect01(Rect r)
+    void RunModel(Texture sourceTexture)
     {
-        float xMin = Mathf.Clamp01(r.xMin);
-        float yMin = Mathf.Clamp01(r.yMin);
-        float xMax = Mathf.Clamp01(r.xMax);
-        float yMax = Mathf.Clamp01(r.yMax);
+        Graphics.Blit(sourceTexture, resizedInputRT);
+        TextureConverter.ToTensor(resizedInputRT, input, toNHWC128);
+        runner.Worker.Schedule(input);
+    }
+
+    void GetBoxesAndScores(
+        Tensor<float> output0,
+        Tensor<float> output1,
+        out float[] boxes,
+        out float[] scores
+    )
+    {
+        // The box output normally contains more values than the score output.
+        bool output0IsBoxes = output0.count >= output1.count;
+
+        boxes = output0IsBoxes
+            ? output0.DownloadToArray()
+            : output1.DownloadToArray();
+
+        scores = output0IsBoxes
+            ? output1.DownloadToArray()
+            : output0.DownloadToArray();
+    }
+
+    int FindBestScoreIndex(float[] scores, out float bestScore)
+    {
+        bestScore = -1f;
+        int bestIndex = -1;
+
+        int scoreCount = Mathf.Min(NumAnchors, scores.Length);
+
+        for (int i = 0; i < scoreCount; i++)
+        {
+            float probability = ToProbability(scores[i]);
+
+            if (probability > bestScore)
+            {
+                bestScore = probability;
+                bestIndex = i;
+            }
+        }
+
+        return bestIndex;
+    }
+
+    bool TryDecodeDetection(float[] boxes, int anchorIndex, float score, out FaceDet detection)
+    {
+        detection = default;
+
+        int baseOffset = anchorIndex * BoxStride;
+
+        if (baseOffset + 15 >= boxes.Length || anchorIndex >= anchors.Length)
+        {
+            LogWarning("Output indexing exceeded expected BlazeFace bounds.");
+            return false;
+        }
+
+        Vector2 anchor = anchors[anchorIndex];
+
+        float centerX = boxes[baseOffset + 0] + anchor.x * InputSize;
+        float centerY = boxes[baseOffset + 1] + anchor.y * InputSize;
+        float width = boxes[baseOffset + 2];
+        float height = boxes[baseOffset + 3];
+
+        Rect faceRect = new Rect(
+            (centerX - 0.5f * width) / InputSize,
+            (centerY - 0.5f * height) / InputSize,
+            width / InputSize,
+            height / InputSize
+        );
+
+        detection.score = score;
+        detection.faceRect01 = ClampRect01(faceRect);
+        detection.kp01 = DecodeKeypoints(boxes, baseOffset, anchor);
+
+        return true;
+    }
+
+    Vector2[] DecodeKeypoints(float[] boxes, int baseOffset, Vector2 anchor)
+    {
+        Vector2[] keypoints = new Vector2[6];
+
+        for (int i = 0; i < keypoints.Length; i++)
+        {
+            float x = boxes[baseOffset + 4 + 2 * i + 0] + anchor.x * InputSize;
+            float y = boxes[baseOffset + 4 + 2 * i + 1] + anchor.y * InputSize;
+
+            keypoints[i] = new Vector2(x / InputSize, y / InputSize);
+        }
+
+        return keypoints;
+    }
+
+    static float ToProbability(float value)
+    {
+        // Some exported models return probabilities directly.
+        if (value >= 0f && value <= 1f)
+            return value;
+
+        // Otherwise, treat the value as a logit.
+        return 1f / (1f + Mathf.Exp(-value));
+    }
+
+    static Rect ClampRect01(Rect rect)
+    {
+        float xMin = Mathf.Clamp01(rect.xMin);
+        float yMin = Mathf.Clamp01(rect.yMin);
+        float xMax = Mathf.Clamp01(rect.xMax);
+        float yMax = Mathf.Clamp01(rect.yMax);
 
         return Rect.MinMaxRect(xMin, yMin, xMax, yMax);
     }
 
     Vector2[] BuildAnchors()
     {
-        var list = new System.Collections.Generic.List<Vector2>(NumAnchors);
+        List<Vector2> anchorList = new List<Vector2>(NumAnchors);
 
-        AddGrid(list, 16, 2);
-        AddGrid(list, 8, 6);
+        AddAnchorGrid(anchorList, 16, 2);
+        AddAnchorGrid(anchorList, 8, 6);
 
-        return list.ToArray();
+        if (anchorList.Count != NumAnchors)
+            Debug.LogWarning($"BlazeFaceSentis: Expected {NumAnchors} anchors but built {anchorList.Count}.");
+
+        return anchorList.ToArray();
     }
 
-    void AddGrid(System.Collections.Generic.List<Vector2> list, int grid, int repeats)
+    void AddAnchorGrid(List<Vector2> anchorList, int gridSize, int repeatsPerCell)
     {
-        for (int y = 0; y < grid; y++)
+        for (int y = 0; y < gridSize; y++)
         {
-            for (int x = 0; x < grid; x++)
+            for (int x = 0; x < gridSize; x++)
             {
-                float cx = (x + 0.5f) / grid;
-                float cy = (y + 0.5f) / grid;
+                float centerX = (x + 0.5f) / gridSize;
+                float centerY = (y + 0.5f) / gridSize;
 
-                for (int r = 0; r < repeats; r++)
-                    list.Add(new Vector2(cx, cy));
+                for (int repeat = 0; repeat < repeatsPerCell; repeat++)
+                    anchorList.Add(new Vector2(centerX, centerY));
             }
         }
+    }
+
+    RenderTexture CreateInputRenderTexture()
+    {
+        RenderTexture renderTexture = new RenderTexture(InputSize, InputSize, 0, RenderTextureFormat.ARGB32)
+        {
+            filterMode = FilterMode.Bilinear,
+            wrapMode = TextureWrapMode.Clamp
+        };
+
+        renderTexture.Create();
+        return renderTexture;
+    }
+
+    bool ShouldLog()
+    {
+        return verboseLogging && logEveryNFrames > 0 && Time.frameCount % logEveryNFrames == 0;
+    }
+
+    void LogWarning(string message)
+    {
+        if (ShouldLog())
+            Debug.LogWarning($"BlazeFaceSentis: {message}");
     }
 
     void OnDestroy()
@@ -197,10 +297,11 @@ public class BlazeFaceSentis : MonoBehaviour
         input?.Dispose();
         runner?.Dispose();
 
-        if (rt128 != null)
+        if (resizedInputRT != null)
         {
-            rt128.Release();
-            Destroy(rt128);
+            resizedInputRT.Release();
+            Destroy(resizedInputRT);
+            resizedInputRT = null;
         }
     }
 
